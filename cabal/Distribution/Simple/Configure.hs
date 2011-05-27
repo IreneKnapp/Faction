@@ -67,7 +67,7 @@ module Distribution.Simple.Configure (configure,
 import Distribution.Simple.Compiler
     ( CompilerFlavor(..), Compiler(compilerId), compilerFlavor, compilerVersion
     , showCompilerId, unsupportedLanguages, unsupportedExtensions
-    , PackageDB(..), PackageDBStack )
+    , PackageDB(..), PackageDBStack, hcDefines )
 import Distribution.Package
     ( PackageName(PackageName), PackageIdentifier(..), PackageId
     , packageName, packageVersion, Package(..)
@@ -87,6 +87,8 @@ import Distribution.PackageDescription.Configuration
     ( finalizePackageDescription, mapTreeData )
 import Distribution.PackageDescription.Check
     ( PackageCheck(..), checkPackage, checkPackageFiles )
+import Distribution.Simple.CCompiler
+    ( CDialect(..), cDialectFilenameExtension, filenameCDialect )
 import Distribution.Simple.Hpc ( enableCoverage )
 import Distribution.Simple.Program
     ( Program(..), ProgramLocation(..), ConfiguredProgram(..)
@@ -129,7 +131,7 @@ import Control.Monad
 import Data.List
     ( nub, partition, isPrefixOf, inits, find )
 import Data.Maybe
-    ( isNothing, catMaybes, mapMaybe )
+    ( isJust, isNothing, catMaybes, mapMaybe, fromMaybe )
 import Data.Monoid
     ( Monoid(..) )
 import Data.Graph
@@ -139,7 +141,7 @@ import System.Directory
 import System.Exit
     ( ExitCode(..), exitWith )
 import System.FilePath
-    ( (</>), isAbsolute )
+    ( (</>), isAbsolute, takeFileName )
 import qualified System.Info
     ( compilerName, compilerVersion )
 import System.IO
@@ -853,30 +855,37 @@ configCompiler (Just hcFlavor) hcPath hcPkg conf verbosity = do
 -- TODO: produce a log file from the compiler errors, if any.
 checkForeignDeps :: PackageDescription -> LocalBuildInfo -> Verbosity -> IO ()
 checkForeignDeps pkg lbi verbosity = do
-  ifBuildsWith allHeaders (commonCcArgs ++ makeLdArgs allLibs) -- I'm feeling lucky
+  foreignHeaderLanguages <- getForeignHeaderLanguages pkg lbi verbosity
+  ifBuildsWith foreignHeaderLanguages
+               allHeaders
+               (commonCcArgs ++ makeLdArgs allLibs)
+               -- I'm feeling lucky
            (return ())
-           (do missingLibs <- findMissingLibs
-               missingHdr  <- findOffendingHdr
+           (do missingLibs <- findMissingLibs foreignHeaderLanguages
+               missingHdr  <- findOffendingHdr foreignHeaderLanguages
                explainErrors missingHdr missingLibs)
       where
         allHeaders = collectField PD.includes
         allLibs    = collectField PD.extraLibs
 
-        ifBuildsWith headers args success failure = do
-            ok <- builds (makeProgram headers) args
+        ifBuildsWith foreignHeaderLanguages headers args success failure = do
+            ok <- builds foreignHeaderLanguages
+                         (makeProgram headers)
+                         headers
+                         args
             if ok then success else failure
 
-        findOffendingHdr =
-            ifBuildsWith allHeaders ccArgs
+        findOffendingHdr foreignHeaderLanguages =
+            ifBuildsWith foreignHeaderLanguages allHeaders ccArgs
                          (return Nothing)
                          (go . tail . inits $ allHeaders)
             where
               go [] = return Nothing       -- cannot happen
               go (hdrs:hdrsInits) =
                     -- Try just preprocessing first
-                    ifBuildsWith hdrs cppArgs
+                    ifBuildsWith foreignHeaderLanguages hdrs cppArgs
                       -- If that works, try compiling too
-                      (ifBuildsWith hdrs ccArgs
+                      (ifBuildsWith foreignHeaderLanguages hdrs ccArgs
                         (go hdrsInits)
                         (return . Just . Right . last $ hdrs))
                       (return . Just . Left . last $ hdrs)
@@ -884,11 +893,14 @@ checkForeignDeps pkg lbi verbosity = do
               cppArgs = "-E":commonCppArgs -- preprocess only
               ccArgs  = "-c":commonCcArgs  -- don't try to link
 
-        findMissingLibs = ifBuildsWith [] (makeLdArgs allLibs)
-                                       (return [])
-                                       (filterM (fmap not . libExists) allLibs)
+        findMissingLibs foreignHeaderLanguages =
+          ifBuildsWith foreignHeaderLanguages [] (makeLdArgs allLibs)
+                       (return [])
+                       (filterM (fmap not . libExists foreignHeaderLanguages)
+                                allLibs)
 
-        libExists lib = builds (makeProgram []) (makeLdArgs [lib])
+        libExists foreignHeaderLanguages lib =
+          builds foreignHeaderLanguages (makeProgram []) [] (makeLdArgs [lib])
 
         commonCppArgs = hcDefines (compiler lbi)
                      ++ [ "-I" ++ autogenModulesDir lbi ]
@@ -925,9 +937,13 @@ checkForeignDeps pkg lbi verbosity = do
         allBi = allBuildInfo pkg
         deps = PackageIndex.topologicalOrder (installedPkgs lbi)
 
-        builds program args = do
+        builds foreignHeaderLanguages program headers args = do
             tempDir <- getTemporaryDirectory
-            withTempFile tempDir ".c" $ \cName cHnd ->
+            let dialect =
+                  mconcat $ mapMaybe (flip lookup foreignHeaderLanguages)
+                                     headers
+                extension = cDialectFilenameExtension dialect True
+            withTempFile tempDir ("." ++ extension) $ \cName cHnd ->
               withTempFile tempDir "" $ \oNname oHnd -> do
                 hPutStrLn cHnd program
                 hClose cHnd
@@ -989,32 +1005,146 @@ checkForeignDeps pkg lbi verbosity = do
           ++ "You can re-run configure with the verbosity flag "
           ++ "-v3 to see the error messages from the C compiler."
 
-        --FIXME: share this with the PreProcessor module
-        hcDefines :: Compiler -> [String]
-        hcDefines comp =
-          case compilerFlavor comp of
-            GHC  -> ["-D__GLASGOW_HASKELL__=" ++ versionInt version]
-            JHC  -> ["-D__JHC__=" ++ versionInt version]
-            NHC  -> ["-D__NHC__=" ++ versionInt version]
-            Hugs -> ["-D__HUGS__"]
-            _    -> []
-          where
-            version = compilerVersion comp
-                      -- TODO: move this into the compiler abstraction
-            -- FIXME: this forces GHC's crazy 4.8.2 -> 408 convention on all
-            -- the other compilers. Check if that's really what they want.
-            versionInt :: Version -> String
-            versionInt (Version { versionBranch = [] }) = "1"
-            versionInt (Version { versionBranch = [n] }) = show n
-            versionInt (Version { versionBranch = n1:n2:_ })
-              = -- 6.8.x -> 608
-                -- 6.10.x -> 610
-                let s1 = show n1
-                    s2 = show n2
-                    middle = case s2 of
-                             _ : _ : _ -> ""
-                             _         -> "0"
-                in s1 ++ middle ++ s2
+getForeignHeaderLanguages
+    :: PackageDescription
+    -> LocalBuildInfo
+    -> Verbosity
+    -> IO [(FilePath, CDialect)]
+getForeignHeaderLanguages pkg lbi verbosity = do
+  case computeAllSourceLanguages of
+    Nothing -> die $ unlines $
+      ["Unable to infer programming language from filename:"]
+      ++ mapMaybe (\cSource ->
+                     case filenameCDialect $ takeFileName cSource of
+                       Nothing -> Just $ "* " ++ cSource
+                       Just _ -> Nothing)
+                  allSources
+    Just allSourceLanguages -> do
+      allSourceDependenciesOrExceptionList <- getAllSourceDependencies
+      case allSourceDependenciesOrExceptionList of
+        Left exceptionList -> die $ unlines $
+          ["Unable to interrogate the C compiler as to dependencies:"]
+          ++ map (\cSource -> "* " ++ cSource) exceptionList
+        Right allSourceDependencies -> do
+          let allIncludedFrom = computeAllIncludedFrom allSourceDependencies
+          case computeAllHeaderLanguages allIncludedFrom allSourceLanguages of
+            Left exceptionList -> die $ unlines $
+              ["Unable to infer programming language for header:"]
+              ++ map (\header -> "* " ++ header) exceptionList
+            Right allHeaderLanguages -> do
+              return allHeaderLanguages
+  where
+        allHeaders = collectField PD.includes
+        allSources = collectField PD.cSources
+        
+        commonCppArgs = hcDefines (compiler lbi)
+                     ++ [ "-I" ++ autogenModulesDir lbi ]
+                     ++ [ "-I" ++ dir | dir <- collectField PD.includeDirs ]
+                     ++ ["-I."]
+                     ++ collectField PD.cppOptions
+                     ++ collectField PD.ccOptions
+                     ++ [ "-I" ++ dir
+                        | dep <- deps
+                        , dir <- Installed.includeDirs dep ]
+                     ++ [ opt
+                        | dep <- deps
+                        , opt <- Installed.ccOptions dep ]
+        
+        commonCcArgs  = commonCppArgs
+                     ++ collectField PD.ccOptions
+                     ++ [ opt
+                        | dep <- deps
+                        , opt <- Installed.ccOptions dep ]
+        
+        collectField f = concatMap f allBi
+        allBi = allBuildInfo pkg
+        deps = PackageIndex.topologicalOrder (installedPkgs lbi)
+        
+        getAllSourceDependencies
+            :: IO (Either [FilePath] [(FilePath, [FilePath])])
+        getAllSourceDependencies = do
+          allMaybeDependencies <-
+            mapM (\cSource -> do
+                    (do
+                       dependencies <- getSourceDependencies cSource
+                       return (cSource, Just dependencies))
+                    `catchIO`   (\_ -> return (cSource, Nothing))
+                    `catchExit` (\_ -> return (cSource, Nothing)))
+                 allSources
+          return $ if all (isJust . snd) allMaybeDependencies
+                     then Right
+                          $ mapMaybe (\(cSource, maybeDependencies) ->
+                                         fmap (\dependencies ->
+                                                 (cSource, dependencies))
+                                              maybeDependencies)
+                                     allMaybeDependencies
+                     else Left
+                          $ mapMaybe (\(cSource, maybeDependencies) ->
+                                         case maybeDependencies of
+                                           Nothing -> Just cSource
+                                           Just _ -> Nothing)
+                                     allMaybeDependencies
+        
+        getSourceDependencies :: FilePath -> IO [FilePath]
+        getSourceDependencies cSource = do
+            tempDir <- getTemporaryDirectory
+            withTempFile tempDir ".d" $ \dName dHnd -> do
+                hClose dHnd
+                _ <- rawSystemProgramStdoutConf verbosity
+                  gccProgram (withPrograms lbi)
+                             ("-MM":"-MF":dName:cSource:commonCcArgs)
+                withFileContents dName $ \dString -> do
+                  let theWords = drop 2 $ words dString
+                  mapM_ (return . length) theWords
+                  return theWords
+        
+        computeAllIncludedFrom
+            :: [(FilePath, [FilePath])] -> [(FilePath, [FilePath])]
+        computeAllIncludedFrom allSourceDependencies =
+          map (\header ->
+                 (header,
+                  mapMaybe (\(cSource, headers) ->
+                               if elem header headers
+                                 then Just cSource
+                                 else Nothing)
+                           allSourceDependencies))
+              allHeaders
+        
+        computeAllSourceLanguages :: Maybe [(FilePath, CDialect)]
+        computeAllSourceLanguages = do
+          mapM (\cSource -> do
+                  (cDialect, _) <- filenameCDialect $ takeFileName cSource
+                  return (cSource, cDialect))
+               allSources
+        
+        computeAllHeaderLanguages
+            :: [(FilePath, [FilePath])]
+            -> [(FilePath, CDialect)]
+            -> Either [FilePath] [(FilePath, CDialect)]
+        computeAllHeaderLanguages allIncludedFrom allSourceLanguages =
+          let allHeaderMaybeLanguages =
+                map (\header ->
+                       let relevantSources =
+                             fromMaybe [] $ lookup header allIncludedFrom
+                           maybeLanguages =
+                             map (flip lookup allSourceLanguages)
+                                 relevantSources
+                       in (header,
+                           if all isJust maybeLanguages
+                             then Just $ mconcat $ catMaybes maybeLanguages
+                             else Nothing))
+                    allHeaders
+          in if all (isJust . snd) allHeaderMaybeLanguages
+               then Right $ mapMaybe (\(header, maybeLanguages) ->
+                                         fmap (\languages ->
+                                                 (header, languages))
+                                              maybeLanguages)
+                                     allHeaderMaybeLanguages
+               else Left $ mapMaybe (\(header, maybeLanguages) ->
+                                        case maybeLanguages of
+                                          Nothing -> Just header
+                                          Just _ -> Nothing)
+                                    allHeaderMaybeLanguages
 
 -- | Output package check warnings and errors. Exit if any errors.
 checkPackageProblems :: Verbosity

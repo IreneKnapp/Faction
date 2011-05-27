@@ -67,7 +67,11 @@ module Distribution.Simple.Compiler (
         languageToFlags,
         unsupportedLanguages,
         extensionsToFlags,
-        unsupportedExtensions
+        unsupportedExtensions,
+        
+        -- * Information required for cooperating with C compilers
+        hcDefines,
+        hcVersionInt
   ) where
 
 import Distribution.Compiler
@@ -192,3 +196,32 @@ extensionsToFlags comp = nub . filter (not . null)
 
 extensionToFlag :: Compiler -> Extension -> Maybe Flag
 extensionToFlag comp ext = lookup ext (compilerExtensions comp)
+
+-- ------------------------------------------------------------
+-- * Information required for cooperating with C compilers
+-- ------------------------------------------------------------
+
+hcDefines :: Compiler -> [String]
+hcDefines comp =
+  case compilerFlavor comp of
+    GHC  -> ["-D__GLASGOW_HASKELL__=" ++ hcVersionInt version]
+    JHC  -> ["-D__JHC__=" ++ hcVersionInt version]
+    NHC  -> ["-D__NHC__=" ++ hcVersionInt version]
+    Hugs -> ["-D__HUGS__"]
+    _    -> []
+  where version = compilerVersion comp
+
+-- FIXME: this forces GHC's crazy 4.8.2 -> 408 convention on all the other
+-- compilers. Check if that's really what they want.
+hcVersionInt :: Version -> String
+hcVersionInt (Version { versionBranch = [] }) = "1"
+hcVersionInt (Version { versionBranch = [n] }) = show n
+hcVersionInt (Version { versionBranch = n1:n2:_ })
+  = -- 6.8.x -> 608
+    -- 6.10.x -> 610
+    let s1 = show n1
+        s2 = show n2
+        middle = case s2 of
+                 _ : _ : _ -> ""
+                 _         -> "0"
+    in s1 ++ middle ++ s2

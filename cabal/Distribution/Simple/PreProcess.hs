@@ -71,7 +71,7 @@ import qualified Distribution.InstalledPackageInfo as Installed
          ( InstalledPackageInfo_(..) )
 import qualified Distribution.Simple.PackageIndex as PackageIndex
 import Distribution.Simple.Compiler
-         ( CompilerFlavor(..), Compiler(..), compilerFlavor, compilerVersion )
+         ( CompilerFlavor(..), compilerFlavor, hcDefines )
 import Distribution.Simple.LocalBuildInfo
          ( LocalBuildInfo(..), Component(..) )
 import Distribution.Simple.BuildPaths (autogenModulesDir,cppHeaderName)
@@ -529,32 +529,6 @@ sysDefines = ["-D" ++ os   ++ "_" ++ loc ++ "_OS"   | loc <- locations]
           ++ ["-D" ++ arch ++ "_" ++ loc ++ "_ARCH" | loc <- locations]
   where
     locations = ["BUILD", "HOST"]
-
-hcDefines :: Compiler -> [String]
-hcDefines comp =
-  case compilerFlavor comp of
-    GHC  -> ["-D__GLASGOW_HASKELL__=" ++ versionInt version]
-    JHC  -> ["-D__JHC__=" ++ versionInt version]
-    NHC  -> ["-D__NHC__=" ++ versionInt version]
-    Hugs -> ["-D__HUGS__"]
-    _    -> []
-  where version = compilerVersion comp
-
--- TODO: move this into the compiler abstraction
--- FIXME: this forces GHC's crazy 4.8.2 -> 408 convention on all the other
--- compilers. Check if that's really what they want.
-versionInt :: Version -> String
-versionInt (Version { versionBranch = [] }) = "1"
-versionInt (Version { versionBranch = [n] }) = show n
-versionInt (Version { versionBranch = n1:n2:_ })
-  = -- 6.8.x -> 608
-    -- 6.10.x -> 610
-    let s1 = show n1
-        s2 = show n2
-        middle = case s2 of
-                 _ : _ : _ -> ""
-                 _         -> "0"
-    in s1 ++ middle ++ s2
 
 ppHappy :: BuildInfo -> LocalBuildInfo -> PreProcessor
 ppHappy _ lbi = pp { platformIndependent = True }
