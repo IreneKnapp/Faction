@@ -41,6 +41,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
 
 module Distribution.Simple.CCompiler
   (CDialect(..),
+   cSourceExtensions,
    cDialectFilenameExtension,
    filenameCDialect)
   where
@@ -70,6 +71,14 @@ instance Monoid CDialect where
   mappend ObjectiveC _ = ObjectiveC
   mappend CPlusPlus _ = CPlusPlus
   mappend ObjectiveCPlusPlus _ = ObjectiveCPlusPlus
+
+
+-- | A list of all file extensions which are recognized as possibly containing
+--   some dialect of C code.  Note that this list is only for source files,
+--   not for header files.
+cSourceExtensions :: [String]
+cSourceExtensions = ["c", "i", "ii", "m", "mi", "mm", "M", "mii", "cc", "cp",
+                     "cxx", "cpp", "CPP", "c++", "C"]
 
 
 -- | Takes a dialect of C and whether code is intended to be passed through
