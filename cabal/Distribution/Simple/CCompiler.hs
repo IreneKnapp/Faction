@@ -69,6 +69,7 @@ instance Monoid CDialect where
   mappend _ ObjectiveCPlusPlus = ObjectiveCPlusPlus
   mappend ObjectiveC _ = ObjectiveC
   mappend CPlusPlus _ = CPlusPlus
+  mappend ObjectiveCPlusPlus _ = ObjectiveCPlusPlus
 
 
 -- | Takes a dialect of C and whether code is intended to be passed through
