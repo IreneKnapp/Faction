@@ -76,6 +76,8 @@ import Distribution.Package
 import Distribution.InstalledPackageInfo as Installed
     ( InstalledPackageInfo, InstalledPackageInfo_(..)
     , emptyInstalledPackageInfo )
+import qualified Distribution.ModuleName as ModuleName
+    ( toFilePath )
 import qualified Distribution.Simple.PackageIndex as PackageIndex
 import Distribution.Simple.PackageIndex (PackageIndex)
 import Distribution.PackageDescription as PD
@@ -132,7 +134,7 @@ import Control.Monad
 import Data.List
     ( nub, partition, isPrefixOf, inits, find, stripPrefix )
 import Data.Maybe
-    ( isJust, isNothing, catMaybes, mapMaybe, fromMaybe )
+    ( isJust, isNothing, catMaybes, mapMaybe, fromMaybe, maybeToList )
 import Data.Monoid
     ( Monoid(..) )
 import Data.Graph
@@ -142,7 +144,8 @@ import System.Directory
 import System.Exit
     ( ExitCode(..), exitWith )
 import System.FilePath
-    ( (</>), isAbsolute, takeFileName, pathSeparator )
+    ( (</>), (<.>), isAbsolute, takeFileName, pathSeparator, dropExtension
+    , dropFileName )
 import qualified System.Info
     ( compilerName, compilerVersion )
 import System.IO
@@ -854,9 +857,11 @@ configCompiler (Just hcFlavor) hcPath hcPkg conf verbosity = do
 -- with individual headers and libs.  If none is the obvious culprit then give a
 -- generic error message.
 -- TODO: produce a log file from the compiler errors, if any.
-checkForeignDeps :: PackageDescription -> LocalBuildInfo -> Verbosity -> IO ()
-checkForeignDeps pkg lbi verbosity = do
-  foreignHeaderLanguages <- getForeignHeaderLanguages pkg lbi verbosity
+checkForeignDeps
+  :: FilePath -> PackageDescription -> LocalBuildInfo -> Verbosity -> IO ()
+checkForeignDeps distPref pkg lbi verbosity = do
+  foreignHeaderLanguages <-
+    getForeignHeaderLanguages distPref pkg lbi verbosity
   ifBuildsWith foreignHeaderLanguages
                allHeaders
                (commonCcArgs ++ makeLdArgs allLibs)
@@ -1007,11 +1012,12 @@ checkForeignDeps pkg lbi verbosity = do
           ++ "-v3 to see the error messages from the C compiler."
 
 getForeignHeaderLanguages
-    :: PackageDescription
+    :: FilePath
+    -> PackageDescription
     -> LocalBuildInfo
     -> Verbosity
     -> IO [(FilePath, CDialect)]
-getForeignHeaderLanguages pkg lbi verbosity = do
+getForeignHeaderLanguages distPref pkg lbi verbosity = do
   case computeAllSourceLanguages of
     Nothing -> die $ unlines $
       ["Unable to infer programming language from filename:"]
@@ -1021,6 +1027,7 @@ getForeignHeaderLanguages pkg lbi verbosity = do
                        Just _ -> Nothing)
                   allSources
     Just allSourceLanguages -> do
+      createDummyStubHeaders
       allSourceDependenciesOrExceptionList <- getAllSourceDependencies
       case allSourceDependenciesOrExceptionList of
         Left exceptionList -> die $ unlines $
@@ -1039,8 +1046,30 @@ getForeignHeaderLanguages pkg lbi verbosity = do
         allSources = collectField PD.cSources
         allHeaderDirs = collectField PD.includeDirs
         allSourceDirs = collectField PD.cSourceDirs
+        allModulePaths = mainModulePaths
+                         ++ (map ModuleName.toFilePath
+                                 $ allExposedModules ++ allOtherModules)
+        mainModulePaths = map (dropExtension . PD.modulePath)
+                              $ PD.executables pkg
+        allExposedModules = concatMap PD.exposedModules
+                                      $ maybeToList $ PD.library pkg
+        allOtherModules = collectField PD.otherModules
+        
+        dummyStubHeaderDir = distPref </> "build" </> "dummy"
+        
+        createDummyStubHeaders = do
+          createDirectoryIfMissing True dummyStubHeaderDir
+          mapM_ (\modulePath' -> do
+                   let dummyStubHeaderPath =
+                         dummyStubHeaderDir
+                         </> (modulePath' ++ "_stub") <.> "h"
+                       dummyStubHeaderSubdir = dropFileName dummyStubHeaderPath
+                   createDirectoryIfMissing True dummyStubHeaderSubdir
+                   writeFileAtomic dummyStubHeaderPath "")
+                allModulePaths
         
         commonCppArgs = hcDefines (compiler lbi)
+                     ++ [ "-I" ++ dummyStubHeaderDir ]
                      ++ [ "-I" ++ autogenModulesDir lbi ]
                      ++ [ "-I" ++ dir | dir <- collectField PD.includeDirs ]
                      ++ ["-I."]

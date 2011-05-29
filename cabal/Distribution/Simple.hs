@@ -509,8 +509,9 @@ simpleUserHooks =
       }
   where
     finalChecks _args flags pkg_descr lbi =
-      checkForeignDeps pkg_descr lbi (lessVerbose verbosity)
+      checkForeignDeps distPref pkg_descr lbi (lessVerbose verbosity)
       where
+        distPref = fromFlag (configDistPref flags)
         verbosity = fromFlag (configVerbosity flags)
 
 -- | Basic autoconf 'UserHooks':
