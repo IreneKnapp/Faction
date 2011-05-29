@@ -365,6 +365,9 @@ binfoFieldDescrs =
  , listField   "include-dirs"
            showFilePath       parseFilePathQ
            includeDirs        (\paths binfo -> binfo{includeDirs=paths})
+ , listField   "c-source-dirs"
+           showFilePath       parseFilePathQ
+           cSourceDirs        (\paths binfo -> binfo{cSourceDirs=paths})
  , listField   "hs-source-dirs"
            showFilePath       parseFilePathQ
            hsSourceDirs       (\paths binfo -> binfo{hsSourceDirs=paths})

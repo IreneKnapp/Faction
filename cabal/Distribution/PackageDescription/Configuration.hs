@@ -610,9 +610,16 @@ testFillInDefaults tst@(TestSuite { testBuildInfo = bi }) =
 
 biFillInDefaults :: BuildInfo -> BuildInfo
 biFillInDefaults bi =
-    if null (hsSourceDirs bi)
-    then bi { hsSourceDirs = [currentDir] }
-    else bi
+    let hsSourceDirs' = if null (hsSourceDirs bi)
+                          then [currentDir]
+                          else hsSourceDirs bi
+        cSourceDirs' = if null (cSourceDirs bi)
+                         then [currentDir]
+                         else cSourceDirs bi
+    in bi {
+           hsSourceDirs = hsSourceDirs',
+           cSourceDirs = cSourceDirs'
+         }
 
 bug :: String -> a
 bug msg = error $ msg ++ ". Consider this a bug."

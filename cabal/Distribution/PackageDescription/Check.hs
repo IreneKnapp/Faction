@@ -779,6 +779,7 @@ checkPaths pkg =
          [    [ (path, "c-sources")        | path <- cSources        bi ]
            ++ [ (path, "install-includes") | path <- installIncludes bi ]
            ++ [ (path, "hs-source-dirs")   | path <- hsSourceDirs    bi ]
+           ++ [ (path, "c-source-dirs")    | path <- cSourceDirs     bi ]
          | bi <- allBuildInfo pkg ]
     -- paths that are allowed to be absolute
     absPaths = concat
@@ -1301,6 +1302,7 @@ checkLocalPathsExist ops pkg = do
                   [ (dir, "extra-lib-dirs") | dir <- extraLibDirs bi ]
                ++ [ (dir, "include-dirs")   | dir <- includeDirs  bi ]
                ++ [ (dir, "hs-source-dirs") | dir <- hsSourceDirs bi ]
+               ++ [ (dir, "c-source-dirs")  | dir <- cSourceDirs  bi ]
              , isRelative dir ]
   missing <- filterM (liftM not . doesDirectoryExist ops . fst) dirs
   return [ PackageBuildWarning {

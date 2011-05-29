@@ -618,6 +618,7 @@ buildLib verbosity pkg_descr lbi lib clbi = do
        ifSharedLib (runGhcProg ghcArgsShared)
 
   -- build any C sources
+  foundCSources <- mapM (findFile $ cSourceDirs libBi) $ cSources libBi
   unless (null (cSources libBi)) $ do
      info verbosity "Building C Sources..."
      sequence_ [do let (odir,args) = constructCcCmdLine lbi libBi clbi pref
@@ -627,12 +628,13 @@ buildLib verbosity pkg_descr lbi lib clbi = do
                    createDirectoryIfMissingVerbose verbosity True odir
                    runGhcProg args
                    ifSharedLib (runGhcProg (args ++ ["-fPIC", "-osuf dyn_o"]))
-               | filename <- cSources libBi]
+               | filename <- foundCSources ]
 
   -- link:
   info verbosity "Linking..."
-  let cObjs = map (`replaceExtension` objExtension) (cSources libBi)
-      cSharedObjs = map (`replaceExtension` ("dyn_" ++ objExtension)) (cSources libBi)
+  let cObjs = map (`replaceExtension` objExtension) foundCSources
+      cSharedObjs = map (`replaceExtension` ("dyn_" ++ objExtension))
+                        foundCSources
       vanillaLibFilePath = libTargetDir </> mkLibName pkgid
       profileLibFilePath = libTargetDir </> mkProfLibName pkgid
       sharedLibFilePath  = libTargetDir </> mkSharedLibName pkgid
@@ -753,6 +755,7 @@ buildExe verbosity _pkg_descr lbi
   -- FIX: what about exeName.hi-boot?
 
   -- build executables
+  foundCSources <- mapM (findFile $ cSourceDirs exeBi) $ cSources exeBi
   unless (null (cSources exeBi)) $ do
    info verbosity "Building C Sources."
    sequence_ [do let (odir,args) = constructCcCmdLine lbi exeBi clbi
@@ -760,11 +763,11 @@ buildExe verbosity _pkg_descr lbi
                                           (withDynExe lbi) (withProfExe lbi)
                  createDirectoryIfMissingVerbose verbosity True odir
                  runGhcProg args
-             | filename <- cSources exeBi]
+             | filename <- foundCSources]
 
   srcMainFile <- findFile (exeDir : hsSourceDirs exeBi) modPath
 
-  let cObjs = map (`replaceExtension` objExtension) (cSources exeBi)
+  let cObjs = map (`replaceExtension` objExtension) foundCSources
   let binArgs linkExe dynExe profExe =
              "--make"
           :  (if linkExe

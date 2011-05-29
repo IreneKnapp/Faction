@@ -80,7 +80,7 @@ import Distribution.Version
 import Distribution.Simple.Utils
          ( createDirectoryIfMissingVerbose, withUTF8FileContents, writeUTF8File
          , installOrdinaryFile, installOrdinaryFiles, setFileExecutable
-         , findFile, findFileWithExtension, matchFileGlob
+         , findFile, findFileWithExtension, findFirstFile, matchFileGlob
          , withTempDirectory, defaultPackageDesc
          , die, warn, notice, setupMessage )
 import Distribution.Simple.Setup (SDistFlags(..), fromFlag, flagToMaybe)
@@ -94,7 +94,7 @@ import Distribution.Text
 
 import Control.Monad(when, unless)
 import Data.Char (toLower)
-import Data.List (partition, isPrefixOf)
+import Data.List (partition, isPrefixOf, nub)
 import Data.Maybe (isNothing, catMaybes)
 import System.Time (getClockTime, toCalendarTime, CalendarTime(..))
 import System.Directory
@@ -364,18 +364,25 @@ prepareDir verbosity _pkg _distPref inPref pps modules bi
               in findFileWithExtension suffixes searchDirs file
              >>= maybe (notFound module_) return
            | module_ <- modules ++ otherModules bi ]
+         cFiles <- sequence
+           [ findFirstFile id
+                           [ path </> file
+                           | path <- nub $ cSourceDirs bi ]
+             >>= maybe (notFound' file) return
+           | file <- cSources bi ]
          bootFiles <- sequence
            [ let file = ModuleName.toFilePath module_
                  fileExts = ["hs-boot", "lhs-boot"]
               in findFileWithExtension fileExts (hsSourceDirs bi) file
            | module_ <- modules ++ otherModules bi ]
 
-         let allSources = sources ++ catMaybes bootFiles ++ cSources bi
+         let allSources = sources ++ cFiles ++ catMaybes bootFiles
          installOrdinaryFiles verbosity inPref (zip (repeat []) allSources)
 
     where suffixes = ppSuffixes pps ++ ["hs", "lhs"]
           notFound m = die $ "Error: Could not find module: " ++ display m
                           ++ " with any suffix: " ++ show suffixes
+          notFound' f = die $ "Error: Could not find file: " ++ f
 
 copyFileTo :: Verbosity -> FilePath -> FilePath -> IO ()
 copyFileTo verbosity dir file = do

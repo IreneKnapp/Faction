@@ -111,7 +111,8 @@ import Distribution.Simple.Utils
     ( die, warn, info, setupMessage, createDirectoryIfMissingVerbose
     , intercalate, cabalVersion
     , withFileContents, writeFileAtomic
-    , withTempFile )
+    , withTempFile
+    , findFile )
 import Distribution.System
     ( OS(..), buildOS, buildPlatform )
 import Distribution.Version
@@ -1036,6 +1037,7 @@ getForeignHeaderLanguages pkg lbi verbosity = do
   where
         allHeaders = collectField PD.includes
         allSources = collectField PD.cSources
+        allSourceDirs = collectField PD.cSourceDirs
         
         commonCppArgs = hcDefines (compiler lbi)
                      ++ [ "-I" ++ autogenModulesDir lbi ]
@@ -1087,12 +1089,13 @@ getForeignHeaderLanguages pkg lbi verbosity = do
         
         getSourceDependencies :: FilePath -> IO [FilePath]
         getSourceDependencies cSource = do
+            cName <- findFile allSourceDirs cSource
             tempDir <- getTemporaryDirectory
             withTempFile tempDir ".d" $ \dName dHnd -> do
                 hClose dHnd
                 _ <- rawSystemProgramStdoutConf verbosity
                   gccProgram (withPrograms lbi)
-                             ("-MM":"-MF":dName:cSource:commonCcArgs)
+                             ("-MM":"-MF":dName:cName:commonCcArgs)
                 withFileContents dName $ \dString -> do
                   let theWords = drop 2 $ words dString
                   mapM_ (return . length) theWords

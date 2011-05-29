@@ -45,6 +45,7 @@ suite cabalVersion = TestCase $ do
                     { targetBuildDepends =
                             [ Dependency (PackageName "base") anyVersion ]
                     , hsSourceDirs = ["."]
+                    , cSourceDirs = ["."]
                     }
             , testEnabled = False
             }

@@ -512,6 +512,7 @@ data BuildInfo = BuildInfo {
         ldOptions         :: [String],  -- ^ options for linker
         pkgconfigDepends  :: [Dependency], -- ^ pkg-config packages that are used
         frameworks        :: [String], -- ^support frameworks for Mac OS X
+        cSourceDirs       :: [FilePath], -- ^ where to look for .c files
         cSources          :: [FilePath],
         hsSourceDirs      :: [FilePath], -- ^ where to look for the haskell module hierarchy
         otherModules      :: [ModuleName], -- ^ non-exposed or non-main modules
@@ -546,6 +547,7 @@ instance Monoid BuildInfo where
     ldOptions         = [],
     pkgconfigDepends  = [],
     frameworks        = [],
+    cSourceDirs       = [],
     cSources          = [],
     hsSourceDirs      = [],
     otherModules      = [],
@@ -573,6 +575,7 @@ instance Monoid BuildInfo where
     ldOptions         = combine    ldOptions,
     pkgconfigDepends  = combine    pkgconfigDepends,
     frameworks        = combineNub frameworks,
+    cSourceDirs       = combineNub cSourceDirs,
     cSources          = combineNub cSources,
     hsSourceDirs      = combineNub hsSourceDirs,
     otherModules      = combineNub otherModules,
