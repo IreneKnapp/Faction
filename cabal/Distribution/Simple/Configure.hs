@@ -130,7 +130,7 @@ import qualified Distribution.Simple.UHC  as UHC
 import Control.Monad
     ( when, unless, foldM, filterM, forM )
 import Data.List
-    ( nub, partition, isPrefixOf, inits, find )
+    ( nub, partition, isPrefixOf, inits, find, stripPrefix )
 import Data.Maybe
     ( isJust, isNothing, catMaybes, mapMaybe, fromMaybe )
 import Data.Monoid
@@ -142,7 +142,7 @@ import System.Directory
 import System.Exit
     ( ExitCode(..), exitWith )
 import System.FilePath
-    ( (</>), isAbsolute, takeFileName )
+    ( (</>), isAbsolute, takeFileName, pathSeparator )
 import qualified System.Info
     ( compilerName, compilerVersion )
 import System.IO
@@ -1037,6 +1037,7 @@ getForeignHeaderLanguages pkg lbi verbosity = do
   where
         allHeaders = collectField PD.includes
         allSources = collectField PD.cSources
+        allHeaderDirs = collectField PD.includeDirs
         allSourceDirs = collectField PD.cSourceDirs
         
         commonCppArgs = hcDefines (compiler lbi)
@@ -1097,9 +1098,20 @@ getForeignHeaderLanguages pkg lbi verbosity = do
                   gccProgram (withPrograms lbi)
                              ("-MM":"-MF":dName:cName:commonCcArgs)
                 withFileContents dName $ \dString -> do
-                  let theWords = drop 2 $ words dString
+                  let theWords = map (stripPrefixDirectories allHeaderDirs)
+                                     $ filter (\word -> not $ word == "\\")
+                                              $ drop 2 $ words dString
                   mapM_ (return . length) theWords
                   return theWords
+        
+        stripPrefixDirectories :: [FilePath] -> FilePath -> FilePath
+        stripPrefixDirectories prefixDirectories path =
+          head
+           $ catMaybes
+              $ (map (\prefixDirectory ->
+                        stripPrefix (prefixDirectory ++ [pathSeparator]) path)
+                     prefixDirectories)
+                ++ [Just path]
         
         computeAllIncludedFrom
             :: [(FilePath, [FilePath])] -> [(FilePath, [FilePath])]
