@@ -81,6 +81,8 @@ import Distribution.InstalledPackageInfo
          ( InstalledPackageInfo )
 import qualified Distribution.InstalledPackageInfo as InstalledPackageInfo
                                 ( InstalledPackageInfo_(..) )
+import Distribution.Simple.CCompiler
+         ( cSourceExtensions )
 import Distribution.Simple.PackageIndex (PackageIndex)
 import qualified Distribution.Simple.PackageIndex as PackageIndex
 import Distribution.Simple.LocalBuildInfo
@@ -755,18 +757,19 @@ buildExe verbosity _pkg_descr lbi
   -- FIX: what about exeName.hi-boot?
 
   -- build executables
-  foundCSources <- mapM (findFile $ cSourceDirs exeBi) $ cSources exeBi
-  unless (null (cSources exeBi)) $ do
-   info verbosity "Building C Sources."
-   sequence_ [do let (odir,args) = constructCcCmdLine lbi exeBi clbi
-                                          exeDir filename verbosity
-                                          (withDynExe lbi) (withProfExe lbi)
-                 createDirectoryIfMissingVerbose verbosity True odir
-                 runGhcProg args
-             | filename <- foundCSources]
-
   srcMainFile <- findFile (exeDir : hsSourceDirs exeBi) modPath
-
+  let foreignMain = elem (drop 1 $ takeExtension modPath) cSourceExtensions
+  hsRootFiles <- do
+    if not foreignMain
+      then return [srcMainFile]
+      else do
+        maybeFiles <-
+          sequence [ findFileWithExtension ["hs", "lhs"]
+                                           (exeDir : hsSourceDirs exeBi)
+                                           (ModuleName.toFilePath x)
+                   | x <- otherModules exeBi ]
+        return $ catMaybes maybeFiles
+  foundCSources <- mapM (findFile $ cSourceDirs exeBi) $ cSources exeBi
   let cObjs = map (`replaceExtension` objExtension) foundCSources
   let binArgs linkExe dynExe profExe =
              "--make"
@@ -774,21 +777,29 @@ buildExe verbosity _pkg_descr lbi
                  then ["-o", targetDir </> exeNameReal]
                  else ["-c"])
           ++ constructGHCCmdLine lbi exeBi clbi exeDir verbosity
-          ++ [exeDir </> x | x <- cObjs]
-          ++ [srcMainFile]
+          ++ (if linkExe
+                 then [exeDir </> x | x <- cObjs]
+                 else [])
+          ++ hsRootFiles
+          ++ (if foreignMain
+                 then (if linkExe
+                          then [srcMainFile]
+                          else [])
+                      ++ ["-no-hs-main"]
+                 else [])
           ++ ["-optl" ++ opt | opt <- PD.ldOptions exeBi]
           ++ ["-l"++lib | lib <- extraLibs exeBi]
           ++ ["-L"++libDir | libDir <- extraLibDirs exeBi]
           ++ concat [["-framework", f] | f <- PD.frameworks exeBi]
-          ++ if dynExe
-                then ["-dynamic"]
-                else []
-          ++ if profExe
-                then ["-prof",
-                      "-hisuf", "p_hi",
-                      "-osuf", "p_o"
-                     ] ++ ghcProfOptions exeBi
-                else []
+          ++ (if dynExe
+                 then ["-dynamic"]
+                 else [])
+          ++ (if profExe
+                 then ["-prof",
+                       "-hisuf", "p_hi",
+                       "-osuf", "p_o"
+                      ] ++ ghcProfOptions exeBi
+                 else [])
 
   -- For building exe's for profiling that use TH we actually
   -- have to build twice, once without profiling and the again
@@ -797,6 +808,17 @@ buildExe verbosity _pkg_descr lbi
   -- be loaded up and run by the compiler.
   when (withProfExe lbi && EnableExtension TemplateHaskell `elem` allExtensions exeBi)
      (runGhcProg (binArgs False (withDynExe lbi) False))
+
+  runGhcProg (binArgs False (withDynExe lbi) (withProfExe lbi))
+
+  unless (null (cSources exeBi)) $ do
+   info verbosity "Building C Sources."
+   sequence_ [do let (odir,args) = constructCcCmdLine lbi exeBi clbi
+                                          exeDir filename verbosity
+                                          (withDynExe lbi) (withProfExe lbi)
+                 createDirectoryIfMissingVerbose verbosity True odir
+                 runGhcProg args
+             | filename <- foundCSources]
 
   runGhcProg (binArgs True (withDynExe lbi) (withProfExe lbi))
 
