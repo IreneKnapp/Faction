@@ -109,6 +109,9 @@ module Distribution.PackageDescription (
         RepoKind(..),
         RepoType(..),
         knownRepoTypes,
+        
+        -- * Objective-C Garbage-Collection Mode
+        ObjcGCMode(..),
   ) where
 
 import Data.List   (nub, intersperse)
@@ -512,6 +515,7 @@ data BuildInfo = BuildInfo {
         ldOptions         :: [String],  -- ^ options for linker
         pkgconfigDepends  :: [Dependency], -- ^ pkg-config packages that are used
         frameworks        :: [String], -- ^support frameworks for Mac OS X
+        objcGCMode        :: ObjcGCMode, -- ^ mode of Objective-C GC
         cSourceDirs       :: [FilePath], -- ^ where to look for .c files
         cSources          :: [FilePath],
         hsSourceDirs      :: [FilePath], -- ^ where to look for the haskell module hierarchy
@@ -547,6 +551,7 @@ instance Monoid BuildInfo where
     ldOptions         = [],
     pkgconfigDepends  = [],
     frameworks        = [],
+    objcGCMode        = ObjcGCDisabled,
     cSourceDirs       = [],
     cSources          = [],
     hsSourceDirs      = [],
@@ -575,6 +580,7 @@ instance Monoid BuildInfo where
     ldOptions         = combine    ldOptions,
     pkgconfigDepends  = combine    pkgconfigDepends,
     frameworks        = combineNub frameworks,
+    objcGCMode        = combine    objcGCMode,
     cSourceDirs       = combineNub cSourceDirs,
     cSources          = combineNub cSources,
     hsSourceDirs      = combineNub hsSourceDirs,
@@ -894,3 +900,26 @@ data CondTree v c a = CondNode
 --          nest 2 (ppCondTree thenTree disp))
 --        $+$ (maybe empty (\t -> text "else: " $$ nest 2 (ppCondTree t disp))
 --                   mElseTree)
+
+data ObjcGCMode = ObjcGCDisabled
+                | ObjcGCOptional
+                | ObjcGCMandatory
+    deriving (Show, Read, Eq)
+
+instance Monoid ObjcGCMode where
+  mempty = ObjcGCDisabled
+  mappend older ObjcGCDisabled = older
+  mappend _ ObjcGCOptional = ObjcGCOptional
+  mappend _ ObjcGCMandatory = ObjcGCMandatory
+
+instance Text ObjcGCMode where
+  disp ObjcGCDisabled = Disp.text "Disabled"
+  disp ObjcGCOptional = Disp.text "Optional"
+  disp ObjcGCMandatory = Disp.text "Mandatory"
+  parse = Parse.choice
+           [ (Parse.string "Disabled" Parse.+++
+              Parse.string "disabled") >> return ObjcGCDisabled
+           , (Parse.string "Optional" Parse.+++
+              Parse.string "optional") >> return ObjcGCOptional
+           , (Parse.string "Mandatory" Parse.+++
+              Parse.string "mandatory") >> return ObjcGCMandatory ]

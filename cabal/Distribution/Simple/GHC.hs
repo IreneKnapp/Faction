@@ -76,7 +76,8 @@ import qualified Distribution.Simple.GHC.IPI641 as IPI641
 import qualified Distribution.Simple.GHC.IPI642 as IPI642
 import Distribution.PackageDescription as PD
          ( PackageDescription(..), BuildInfo(..), Executable(..)
-         , Library(..), libModules, hcOptions, usedExtensions, allExtensions )
+         , Library(..), libModules, hcOptions, usedExtensions, allExtensions
+         , ObjcGCMode(..) )
 import Distribution.InstalledPackageInfo
          ( InstalledPackageInfo )
 import qualified Distribution.InstalledPackageInfo as InstalledPackageInfo
@@ -791,6 +792,13 @@ buildExe verbosity _pkg_descr lbi
           ++ ["-l"++lib | lib <- extraLibs exeBi]
           ++ ["-L"++libDir | libDir <- extraLibDirs exeBi]
           ++ concat [["-framework", f] | f <- PD.frameworks exeBi]
+          ++ (let flagPrefix = if linkExe
+                                then "-optl"
+                                else "-optc"
+              in case PD.objcGCMode exeBi of
+                   PD.ObjcGCDisabled -> []
+                   PD.ObjcGCOptional -> [flagPrefix ++ "-fobjc-gc"]
+                   PD.ObjcGCMandatory -> [flagPrefix ++ "-fobjc-gc-only"])
           ++ (if dynExe
                  then ["-dynamic"]
                  else [])
@@ -921,6 +929,10 @@ ghcOptions lbi bi clbi odir
            NoOptimisation      -> []
            NormalOptimisation  -> ["-O"]
            MaximumOptimisation -> ["-O2"])
+     ++ (case PD.objcGCMode bi of
+           PD.ObjcGCDisabled -> []
+           PD.ObjcGCOptional -> ["-optc-fobjc-gc"]
+           PD.ObjcGCMandatory -> ["-optc-fobjc-gc-only"])
      ++ hcOptions GHC bi
      ++ languageToFlags   (compiler lbi) (defaultLanguage bi)
      ++ extensionsToFlags (compiler lbi) (usedExtensions bi)
@@ -976,6 +988,10 @@ ghcCcOptions lbi bi clbi odir
      ++ ghcPackageDbOptions (withPackageDB lbi)
      ++ ghcPackageFlags lbi clbi
      ++ ["-optc" ++ opt | opt <- PD.ccOptions bi]
+     ++ (case PD.objcGCMode bi of
+           PD.ObjcGCDisabled -> []
+           PD.ObjcGCOptional -> ["-optc-fobjc-gc"]
+           PD.ObjcGCMandatory -> ["-optc-fobjc-gc-only"])
      ++ (case withOptimization lbi of
            NoOptimisation -> []
            _              -> ["-optc-O2"])

@@ -330,6 +330,9 @@ binfoFieldDescrs =
  , listField "frameworks"
            showToken          parseTokenQ
            frameworks         (\val binfo -> binfo{frameworks=val})
+ , simpleField "objc-gc"
+           disp               parse
+           objcGCMode         (\val binfo -> binfo{objcGCMode=val})
  , listField   "c-sources"
            showFilePath       parseFilePathQ
            cSources           (\paths binfo -> binfo{cSources=paths})
