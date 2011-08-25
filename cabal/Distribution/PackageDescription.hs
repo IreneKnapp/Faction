@@ -118,7 +118,7 @@ import Data.List   (nub, intersperse)
 import Data.Maybe  (maybeToList)
 import Data.Monoid (Monoid(mempty, mappend))
 import Control.Monad (MonadPlus(mplus))
-import Text.PrettyPrint.HughesPJ as Disp
+import Text.PrettyPrint as Disp
 import qualified Distribution.Compat.ReadP as Parse
 import qualified Data.Char as Char (isAlphaNum, isDigit, toLower)
 
