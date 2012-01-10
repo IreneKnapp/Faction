@@ -1,61 +1,23 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.PackageDescription
--- Copyright   :  Isaac Jones 2003-2005
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
--- This defines the data structure for the @.cabal@ file format. There are
--- several parts to this structure. It has top level info and then 'Library',
--- 'Executable', 'TestSuite', and 'Benchmark' sections each of which have
--- associated 'BuildInfo' data that's used to build the library, exe, test, or
--- benchmark.  To further complicate things there is both a 'PackageDescription'
--- and a 'GenericPackageDescription'. This distinction relates to cabal
--- configurations. When we initially read a @.cabal@ file we get a
--- 'GenericPackageDescription' which has all the conditional sections.
--- Before actually building a package we have to decide
--- on each conditional. Once we've done that we get a 'PackageDescription'.
--- It was done this way initially to avoid breaking too much stuff when the
--- feature was introduced. It could probably do with being rationalised at some
--- point to make it simpler.
-
-{- All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Isaac Jones nor the names of other
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
+{-
+This defines the data structure for the @.faction@ file format. There are
+several parts to this structure. It has top level info and then 'Library',
+'Executable', 'TestSuite', and 'Benchmark' sections each of which have
+associated 'BuildInfo' data that's used to build the library, exe, test, or
+benchmark.  To further complicate things there is both a 'PackageDescription'
+and a 'GenericPackageDescription'. This distinction relates to faction
+configurations. When we initially read a @.faction@ file we get a
+'GenericPackageDescription' which has all the conditional sections.
+Before actually building a package we have to decide
+on each conditional. Once we've done that we get a 'PackageDescription'.
+It was done this way initially to avoid breaking too much stuff when the
+feature was introduced. It could probably do with being rationalised at some
+point to make it simpler.
+-}
 
 module Distribution.PackageDescription (
         -- * Package descriptions
         PackageDescription(..),
         emptyPackageDescription,
-        specVersion,
-        descCabalVersion,
         BuildType(..),
         knownBuildTypes,
 
@@ -103,7 +65,6 @@ module Distribution.PackageDescription (
         allBuildInfo,
         allLanguages,
         allExtensions,
-        usedExtensions,
         hcOptions,
 
         -- ** Supplementary build information
@@ -152,7 +113,7 @@ import Language.Haskell.Extension
 -- -----------------------------------------------------------------------------
 -- The PackageDescription type
 
--- | This data type is the internal representation of the file @pkg.cabal@.
+-- | This data type is the internal representation of the file @pkg.faction@.
 -- It contains two kinds of information about the package: information
 -- which is needed for all packages, such as the package name and version, and
 -- information which is needed for the simple build system only, such as
@@ -180,11 +141,8 @@ data PackageDescription
                                              -- with x-, stored in a
                                              -- simple assoc-list.
         buildDepends   :: [Dependency],
-        -- | The version of the Cabal spec that this package description uses.
-        -- For historical reasons this is specified with a version range but
-        -- only ranges of the form @>= v@ make sense. We are in the process of
-        -- transitioning to specifying just a single version, not a range.
-        specVersionRaw :: Either Version VersionRange,
+        -- | The version of the Faction spec that this package description uses.
+        specVersion    :: Version,
         buildType      :: Maybe BuildType,
         -- components
         library        :: Maybe Library,
@@ -201,32 +159,6 @@ data PackageDescription
 instance Package PackageDescription where
   packageId = package
 
--- | The version of the Cabal spec that this package should be interpreted
--- against.
---
--- Historically we used a version range but we are switching to using a single
--- version. Currently we accept either. This function converts into a single
--- version by ignoring upper bounds in the version range.
---
-specVersion :: PackageDescription -> Version
-specVersion pkg = case specVersionRaw pkg of
-  Left  version      -> version
-  Right versionRange -> case asVersionIntervals versionRange of
-                          []                            -> Version [0] []
-                          ((LowerBound version _, _):_) -> version
-
--- | The range of versions of the Cabal tools that this package is intended to
--- work with.
---
--- This function is deprecated and should not be used for new purposes, only to
--- support old packages that rely on the old interpretation.
---
-descCabalVersion :: PackageDescription -> VersionRange
-descCabalVersion pkg = case specVersionRaw pkg of
-  Left  version      -> orLaterVersion version
-  Right versionRange -> versionRange
-{-# DEPRECATED descCabalVersion "Use specVersion instead" #-}
-
 emptyPackageDescription :: PackageDescription
 emptyPackageDescription
     =  PackageDescription {
@@ -234,7 +166,7 @@ emptyPackageDescription
                                                        (Version [] []),
                       license      = AllRightsReserved,
                       licenseFile  = "",
-                      specVersionRaw = Right anyVersion,
+                      specVersion  = Version [1] [],
                       buildType    = Nothing,
                       copyright    = "",
                       maintainer   = "",
@@ -388,7 +320,7 @@ exeModules exe = otherModules (buildInfo exe)
 -- ---------------------------------------------------------------------------
 -- The TestSuite type
 
--- | A \"test-suite\" stanza in a cabal file.
+-- | A \"test-suite\" stanza in a faction file.
 --
 data TestSuite = TestSuite {
         testName      :: String,
@@ -520,7 +452,7 @@ testType test = case testInterface test of
 -- ---------------------------------------------------------------------------
 -- The Benchmark type
 
--- | A \"benchmark\" stanza in a cabal file.
+-- | A \"benchmark\" stanza in a faction file.
 --
 data Benchmark = Benchmark {
         benchmarkName      :: String,
@@ -658,7 +590,6 @@ data BuildInfo = BuildInfo {
         otherLanguages    :: [Language],    -- ^ other languages used within the package
         defaultExtensions :: [Extension],   -- ^ language extensions used by all modules
         otherExtensions   :: [Extension],   -- ^ other language extensions used within the package
-        oldExtensions     :: [Extension],   -- ^ the old extensions field, treated same as 'defaultExtensions'
 
         extraLibs         :: [String], -- ^ what libraries to link with when compiling a program that uses your package
         extraLibDirs      :: [String],
@@ -693,7 +624,6 @@ instance Monoid BuildInfo where
     otherLanguages    = [],
     defaultExtensions = [],
     otherExtensions   = [],
-    oldExtensions     = [],
     extraLibs         = [],
     extraLibDirs      = [],
     includeDirs       = [],
@@ -722,7 +652,6 @@ instance Monoid BuildInfo where
     otherLanguages    = combineNub otherLanguages,
     defaultExtensions = combineNub defaultExtensions,
     otherExtensions   = combineNub otherExtensions,
-    oldExtensions     = combineNub oldExtensions,
     extraLibs         = combine    extraLibs,
     extraLibDirs      = combineNub extraLibDirs,
     includeDirs       = combineNub includeDirs,
@@ -772,14 +701,8 @@ allLanguages bi = maybeToList (defaultLanguage bi)
 -- | The 'Extension's that are used somewhere by this component
 --
 allExtensions :: BuildInfo -> [Extension]
-allExtensions bi = usedExtensions bi
+allExtensions bi = defaultExtensions bi
                 ++ otherExtensions bi
-
--- | The 'Extensions' that are used by all modules in this component
---
-usedExtensions :: BuildInfo -> [Extension]
-usedExtensions bi = oldExtensions bi
-                 ++ defaultExtensions bi
 
 type HookedBuildInfo = (Maybe BuildInfo, [(String, BuildInfo)])
 
@@ -846,9 +769,9 @@ data SourceRepo = SourceRepo {
 
   -- | Some repositories contain multiple projects in different subdirectories
   -- This field specifies the subdirectory where this packages sources can be
-  -- found, eg the subdirectory containing the @.cabal@ file. It is interpreted
-  -- relative to the root of the repository. This field is optional. If not
-  -- given the default is \".\" ie no subdirectory.
+  -- found, eg the subdirectory containing the @.faction@ file. It is
+  -- interpreted relative to the root of the repository. This field is
+  -- optional. If not given the default is \".\" ie no subdirectory.
   repoSubdir   :: Maybe FilePath
 }
   deriving (Eq, Read, Show)

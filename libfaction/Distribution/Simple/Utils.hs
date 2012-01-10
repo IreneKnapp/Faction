@@ -1,53 +1,14 @@
 {-# LANGUAGE CPP, ForeignFunctionInterface #-}
-{-# OPTIONS_NHC98 -cpp #-}
-{-# OPTIONS_JHC -fcpp -fffi #-}
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.Simple.Utils
--- Copyright   :  Isaac Jones, Simon Marlow 2003-2004
---                portions Copyright (c) 2007, Galois Inc.
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
--- A large and somewhat miscellaneous collection of utility functions used
--- throughout the rest of the Cabal lib and in other tools that use the Cabal
--- lib like @cabal-install@. It has a very simple set of logging actions. It
--- has low level functions for running programs, a bunch of wrappers for
--- various directory and file functions that do extra logging.
-
-{- All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Isaac Jones nor the names of other
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
+{-
+A large and somewhat miscellaneous collection of utility functions used
+throughout the rest of libfaction and in other tools that use it, like
+@faction@. It has a very simple set of logging actions. It has low level
+functions for running programs, a bunch of wrappers for various directory
+and file functions that do extra logging.
+-}
 
 module Distribution.Simple.Utils (
-        cabalVersion,
+        factionVersion,
 
         -- * logging and errors
         die,
@@ -106,7 +67,7 @@ module Distribution.Simple.Utils (
         withTempFile,
         withTempDirectory,
 
-        -- * .cabal and .buildinfo files
+        -- * .faction and .buildinfo files
         defaultPackageDesc,
         findPackageDesc,
         defaultHookedPackageDesc,
@@ -206,17 +167,17 @@ import Distribution.Compat.Exception
 import Distribution.Verbosity
 
 #ifdef VERSION_base
-import qualified Paths_Cabal (version)
+import qualified Paths_Faction (version)
 #endif
 
 -- We only get our own version number when we're building with ourselves
-cabalVersion :: Version
+factionVersion :: Version
 #if defined(VERSION_base)
-cabalVersion = Paths_Cabal.version
-#elif defined(CABAL_VERSION)
-cabalVersion = Version [CABAL_VERSION] []
+factionVersion = Paths_Faction.version
+#elif defined(FACTION_VERSION)
+factionVersion = Version [FACTION_VERSION] []
 #else
-cabalVersion = Version [1,9999] []  --used when bootstrapping
+factionVersion = Version [1,9999] []  --used when bootstrapping
 #endif
 
 -- ----------------------------------------------------------------------------
@@ -959,35 +920,36 @@ currentDir = "."
 -- * Finding the description file
 -- ------------------------------------------------------------
 
--- |Package description file (/pkgname/@.cabal@)
+-- |Package description file (/pkgname/@.faction@)
 defaultPackageDesc :: Verbosity -> IO FilePath
 defaultPackageDesc _verbosity = findPackageDesc currentDir
 
 -- |Find a package description file in the given directory.  Looks for
--- @.cabal@ files.
+-- @.faction@ files.
 findPackageDesc :: FilePath    -- ^Where to look
-                -> IO FilePath -- ^<pkgname>.cabal
+                -> IO FilePath -- ^<pkgname>.faction
 findPackageDesc dir
  = do files <- getDirectoryContents dir
-      -- to make sure we do not mistake a ~/.cabal/ dir for a <pkgname>.cabal
-      -- file we filter to exclude dirs and null base file names:
-      cabalFiles <- filterM doesFileExist
+      -- to make sure we do not mistake a ~/.faction/ dir for
+      -- a <pkgname>.faction file we filter to exclude dirs and null
+      -- base file names:
+      factionFiles <- filterM doesFileExist
                        [ dir </> file
                        | file <- files
                        , let (name, ext) = splitExtension file
-                       , not (null name) && ext == ".cabal" ]
-      case cabalFiles of
+                       , not (null name) && ext == ".faction" ]
+      case factionFiles of
         []          -> noDesc
-        [cabalFile] -> return cabalFile
+        [factionFile] -> return factionFile
         multiple    -> multiDesc multiple
 
   where
     noDesc :: IO a
-    noDesc = die $ "No cabal file found.\n"
-                ++ "Please create a package description file <pkgname>.cabal"
+    noDesc = die $ "No faction file found.\n"
+                ++ "Please create a package description file <pkgname>.faction"
 
     multiDesc :: [String] -> IO a
-    multiDesc l = die $ "Multiple cabal files found.\n"
+    multiDesc l = die $ "Multiple faction files found.\n"
                     ++ "Please use only one of: "
                     ++ intercalate ", " l
 

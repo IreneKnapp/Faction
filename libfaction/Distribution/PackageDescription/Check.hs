@@ -1,53 +1,17 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.PackageDescription.Check
--- Copyright   :  Lennart Kolmodin 2008
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
--- This has code for checking for various problems in packages. There is one
--- set of checks that just looks at a 'PackageDescription' in isolation and
--- another set of checks that also looks at files in the package. Some of the
--- checks are basic sanity checks, others are portability standards that we'd
--- like to encourage. There is a 'PackageCheck' type that distinguishes the
--- different kinds of check so we can see which ones are appropriate to report
--- in different situations. This code gets uses when configuring a package when
--- we consider only basic problems. The higher standard is uses when when
--- preparing a source tarball and by hackage when uploading new packages. The
--- reason for this is that we want to hold packages that are expected to be
--- distributed to a higher standard than packages that are only ever expected
--- to be used on the author's own environment.
-
-{- All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Isaac Jones nor the names of other
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
+{-
+This has code for checking for various problems in packages. There is one
+set of checks that just looks at a 'PackageDescription' in isolation and
+another set of checks that also looks at files in the package. Some of the
+checks are basic sanity checks, others are portability standards that we'd
+like to encourage. There is a 'PackageCheck' type that distinguishes the
+different kinds of check so we can see which ones are appropriate to report
+in different situations. This code gets uses when configuring a package when
+we consider only basic problems. The higher standard is uses when when
+preparing a source tarball and by hackage when uploading new packages. The
+reason for this is that we want to hold packages that are expected to be
+distributed to a higher standard than packages that are only ever expected
+to be used on the author's own environment.
+-}
 
 module Distribution.PackageDescription.Check (
         -- * Package Checking
@@ -83,7 +47,7 @@ import Distribution.License
 import Distribution.Simple.CCompiler
          ( filenameCDialect )
 import Distribution.Simple.Utils
-         ( cabalVersion, intercalate, parseFileGlob, FileGlob(..), lowercase )
+         ( factionVersion, intercalate, parseFileGlob, FileGlob(..), lowercase )
 
 import Distribution.Version
          ( Version(..)
@@ -129,7 +93,7 @@ data PackageCheck =
      | PackageBuildWarning { explanation :: String }
 
        -- | An issue that might not be a problem for the package author but
-       -- might be annoying or determental when the package is distributed to
+       -- might be annoying or detrimental when the package is distributed to
        -- users. We should encourage distributed packages to be free from these
        -- issues, but occasionally there are justifiable reasons so we cannot
        -- ban them entirely.
@@ -183,7 +147,7 @@ checkConfiguredPackage pkg =
  ++ checkGhcOptions pkg
  ++ checkCCOptions pkg
  ++ checkPaths pkg
- ++ checkCabalVersion pkg
+ ++ checkFactionVersion pkg
 
 
 -- ------------------------------------------------------------
@@ -220,11 +184,11 @@ checkSanity pkg =
 
   ++ catMaybes [
 
-    check (specVersion pkg > cabalVersion) $
+    check (specVersion pkg > factionVersion) $
       PackageBuildImpossible $
            "This package description follows version "
-        ++ display (specVersion pkg) ++ " of the Cabal specification. This "
-        ++ "tool only supports up to version " ++ display cabalVersion ++ "."
+        ++ display (specVersion pkg) ++ " of the Faction specification. This "
+        ++ "tool only supports up to version " ++ display factionVersion ++ "."
   ]
   where
     exeNames = map exeName $ executables pkg
@@ -604,11 +568,11 @@ checkGhcOptions pkg =
 
   , checkFlags ["-hide-package"] $
       PackageBuildWarning $
-           "'ghc-options: -hide-package' is never needed. Cabal hides all packages."
+           "'ghc-options: -hide-package' is never needed. Faction hides all packages."
 
   , checkFlags ["--make"] $
       PackageBuildWarning $
-        "'ghc-options: --make' is never needed. Cabal uses this automatically."
+        "'ghc-options: --make' is never needed. Faction uses this automatically."
 
   , checkFlags ["-main-is"] $
       PackageDistSuspicious $
@@ -620,7 +584,7 @@ checkGhcOptions pkg =
 
   , checkFlags [ "-O", "-O1"] $
       PackageDistInexcusable $
-           "'ghc-options: -O' is not needed. Cabal automatically adds the '-O' flag. "
+           "'ghc-options: -O' is not needed. Faction automatically adds the '-O' flag. "
         ++ "Setting it yourself interferes with the --disable-optimization flag."
 
   , checkFlags ["-O2"] $
@@ -635,10 +599,10 @@ checkGhcOptions pkg =
   , checkFlags ["-optl-Wl,-s", "-optl-s"] $
       PackageDistInexcusable $
            "'ghc-options: -optl-Wl,-s' is not needed and is not portable to all"
-        ++ " operating systems. Cabal 1.4 and later automatically strip"
-        ++ " executables. Cabal also has a flag --disable-executable-stripping"
-        ++ " which is necessary when building packages for some Linux"
-        ++ " distributions and using '-optl-Wl,-s' prevents that from working."
+        ++ " operating systems. Faction automatically strips executables."
+        ++ " Faction also has a flag --disable-executable-stripping which is"
+        ++ " necessary when building packages for some Linux distributions and"
+        ++ " using '-optl-Wl,-s' prevents that from working."
 
   , checkFlags ["-fglasgow-exts"] $
       PackageDistSuspicious $
@@ -741,7 +705,7 @@ checkCCOptions pkg =
   , checkCCFlags [ "-O", "-Os", "-O0", "-O1", "-O2", "-O3" ] $
       PackageDistSuspicious $
            "'cc-options: -O[n]' is generally not needed. When building with "
-        ++ " optimisations Cabal automatically adds '-O2' for C code. "
+        ++ " optimisations Faction automatically adds '-O2' for C code. "
         ++ "Setting it yourself interferes with the --disable-optimization "
         ++ "flag."
   ]
@@ -782,7 +746,7 @@ checkPaths pkg =
       ++ "directory. This is not reliable because the location of this "
       ++ "directory is configurable by the user (or package manager). In "
       ++ "addition the layout of the 'dist' directory is subject to change "
-      ++ "in future versions of Cabal."
+      ++ "in future versions of Faction."
   | (path, kind) <- relPaths ++ absPaths
   , isInsideDist path ]
   ++
@@ -791,7 +755,7 @@ checkPaths pkg =
       ++ "inside the 'dist' directory. This is not reliable because the "
       ++ "location of this directory is configurable by the user (or package "
       ++ "manager). In addition the layout of the 'dist' directory is subject "
-      ++ "to change in future versions of Cabal."
+      ++ "to change in future versions of Faction."
   | bi <- allBuildInfo pkg
   , (GHC, flags) <- options bi
   , path <- flags
@@ -830,173 +794,18 @@ checkPaths pkg =
 
 --TODO: use the tar path checks on all the above paths
 
--- | Check that the package declares the version in the @\"cabal-version\"@
+-- | Check that the package declares the version in the @\"faction-version\"@
 -- field correctly.
 --
-checkCabalVersion :: PackageDescription -> [PackageCheck]
-checkCabalVersion pkg =
+checkFactionVersion :: PackageDescription -> [PackageCheck]
+checkFactionVersion pkg =
   catMaybes [
-
-    -- check syntax of cabal-version field
-    check (specVersion pkg >= Version [1,10] []
-           && not simpleSpecVersionRangeSyntax) $
+  check (any isNothing (buildInfoField defaultLanguage)) $
       PackageBuildWarning $
-           "Packages relying on Cabal 1.10 or later must only specify a "
-        ++ "version range of the form 'cabal-version: >= x.y'. Use "
-        ++ "'cabal-version: >= " ++ display (specVersion pkg) ++ "'."
-
-    -- check syntax of cabal-version field
-  , check (specVersion pkg < Version [1,9] []
-           && not simpleSpecVersionRangeSyntax) $
-      PackageDistSuspicious $
-           "It is recommended that the 'cabal-version' field only specify a "
-        ++ "version range of the form '>= x.y'. Use "
-        ++ "'cabal-version: >= " ++ display (specVersion pkg) ++ "'. "
-        ++ "Tools based on Cabal 1.10 and later will ignore upper bounds."
-
-    -- check syntax of cabal-version field
-  , checkVersion [1,12] simpleSpecVersionSyntax $
-      PackageBuildWarning $
-           "With Cabal 1.10 or earlier, the 'cabal-version' field must use "
-        ++ "range syntax rather than a simple version number. Use "
-        ++ "'cabal-version: >= " ++ display (specVersion pkg) ++ "'."
-
-    -- check use of test suite sections
-  , checkVersion [1,8] (not (null $ testSuites pkg)) $
-      PackageDistInexcusable $
-           "The 'test-suite' section is new in Cabal 1.10. "
-        ++ "Unfortunately it messes up the parser in older Cabal versions "
-        ++ "so you must specify at least 'cabal-version: >= 1.8', but note "
-        ++ "that only Cabal 1.10 and later can actually run such test suites."
-
-    -- check use of default-language field
-    -- note that we do not need to do an equivalent check for the
-    -- other-language field since that one does not change behaviour
-  , checkVersion [1,10] (any isJust (buildInfoField defaultLanguage)) $
-      PackageBuildWarning $
-           "To use the 'default-language' field the package needs to specify "
-        ++ "at least 'cabal-version: >= 1.10'."
-
-  , check (specVersion pkg >= Version [1,10] []
-           && (any isNothing (buildInfoField defaultLanguage))) $
-      PackageBuildWarning $
-           "Packages using 'cabal-version: >= 1.10' must specify the "
-        ++ "'default-language' field for each component (e.g. Haskell98 or "
-        ++ "Haskell2010). If a component uses different languages in "
-        ++ "different modules then list the other ones in the "
-        ++ "'other-languages' field."
-
-    -- check use of default-extensions field
-    -- don't need to do the equivalent check for other-extensions
-  , checkVersion [1,10] (any (not . null) (buildInfoField defaultExtensions)) $
-      PackageBuildWarning $
-           "To use the 'default-extensions' field the package needs to specify "
-        ++ "at least 'cabal-version: >= 1.10'."
-
-    -- check use of extensions field
-  , check (specVersion pkg >= Version [1,10] []
-           && (any (not . null) (buildInfoField oldExtensions))) $
-      PackageBuildWarning $
-           "For packages using 'cabal-version: >= 1.10' the 'extensions' "
-        ++ "field is deprecated. The new 'default-extensions' field lists "
-        ++ "extensions that are used in all modules in the component, while "
-        ++ "the 'other-extensions' field lists extensions that are used in "
-        ++ "some modules, e.g. via the {-# LANGUAGE #-} pragma."
-
-    -- check use of "foo (>= 1.0 && < 1.4) || >=1.8 " version-range syntax
-  , checkVersion [1,8] (not (null versionRangeExpressions)) $
-      PackageDistInexcusable $
-           "The package uses full version-range expressions "
-        ++ "in a 'build-depends' field: "
-        ++ commaSep (map displayRawDependency versionRangeExpressions)
-        ++ ". To use this new syntax the package needs to specify at least "
-        ++ "'cabal-version: >= 1.8'. Alternatively, if broader compatibility "
-        ++ "is important, then convert to conjunctive normal form, and use "
-        ++ "multiple 'build-depends:' lines, one conjunct per line."
-
-    -- check use of "build-depends: foo == 1.*" syntax
-  , checkVersion [1,6] (not (null depsUsingWildcardSyntax)) $
-      PackageDistInexcusable $
-           "The package uses wildcard syntax in the 'build-depends' field: "
-        ++ commaSep (map display depsUsingWildcardSyntax)
-        ++ ". To use this new syntax the package need to specify at least "
-        ++ "'cabal-version: >= 1.6'. Alternatively, if broader compatability "
-        ++ "is important then use: " ++ commaSep
-           [ display (Dependency name (eliminateWildcardSyntax versionRange))
-           | Dependency name versionRange <- depsUsingWildcardSyntax ]
-
-    -- check use of "tested-with: GHC (>= 1.0 && < 1.4) || >=1.8 " syntax
-  , checkVersion [1,8] (not (null testedWithVersionRangeExpressions)) $
-      PackageDistInexcusable $
-           "The package uses full version-range expressions "
-        ++ "in a 'tested-with' field: "
-        ++ commaSep (map displayRawDependency testedWithVersionRangeExpressions)
-        ++ ". To use this new syntax the package needs to specify at least "
-        ++ "'cabal-version: >= 1.8'."
-
-    -- check use of "tested-with: GHC == 6.12.*" syntax
-  , checkVersion [1,6] (not (null testedWithUsingWildcardSyntax)) $
-      PackageDistInexcusable $
-           "The package uses wildcard syntax in the 'tested-with' field: "
-        ++ commaSep (map display testedWithUsingWildcardSyntax)
-        ++ ". To use this new syntax the package need to specify at least "
-        ++ "'cabal-version: >= 1.6'. Alternatively, if broader compatability "
-        ++ "is important then use: " ++ commaSep
-           [ display (Dependency name (eliminateWildcardSyntax versionRange))
-           | Dependency name versionRange <- testedWithUsingWildcardSyntax ]
-
-    -- check use of "data-files: data/*.txt" syntax
-  , checkVersion [1,6] (not (null dataFilesUsingGlobSyntax)) $
-      PackageDistInexcusable $
-           "Using wildcards like "
-        ++ commaSep (map quote $ take 3 dataFilesUsingGlobSyntax)
-        ++ " in the 'data-files' field requires 'cabal-version: >= 1.6'. "
-        ++ "Alternatively if you require compatability with earlier Cabal "
-        ++ "versions then list all the files explicitly."
-
-    -- check use of "extra-source-files: mk/*.in" syntax
-  , checkVersion [1,6] (not (null extraSrcFilesUsingGlobSyntax)) $
-      PackageDistInexcusable $
-           "Using wildcards like "
-        ++ commaSep (map quote $ take 3 extraSrcFilesUsingGlobSyntax)
-        ++ " in the 'extra-source-files' field requires "
-        ++ "'cabal-version: >= 1.6'. Alternatively if you require "
-        ++ "compatability with earlier Cabal versions then list all the files "
-        ++ "explicitly."
-
-    -- check use of "source-repository" section
-  , checkVersion [1,6] (not (null (sourceRepos pkg))) $
-      PackageDistInexcusable $
-           "The 'source-repository' section is new in Cabal 1.6. "
-        ++ "Unfortunately it messes up the parser in earlier Cabal versions "
-        ++ "so you need to specify 'cabal-version: >= 1.6'."
-
-    -- check for new licenses
-  , checkVersion [1,4] (license pkg `notElem` compatLicenses) $
-      PackageDistInexcusable $
-           "Unfortunately the license " ++ quote (display (license pkg))
-        ++ " messes up the parser in earlier Cabal versions so you need to "
-        ++ "specify 'cabal-version: >= 1.4'. Alternatively if you require "
-        ++ "compatability with earlier Cabal versions then use 'OtherLicense'."
-
-    -- check for new language extensions
-  , checkVersion [1,2,3] (not (null mentionedExtensionsThatNeedCabal12)) $
-      PackageDistInexcusable $
-           "Unfortunately the language extensions "
-        ++ commaSep (map (quote . display) mentionedExtensionsThatNeedCabal12)
-        ++ " break the parser in earlier Cabal versions so you need to "
-        ++ "specify 'cabal-version: >= 1.2.3'. Alternatively if you require "
-        ++ "compatability with earlier Cabal versions then you may be able to "
-        ++ "use an equivalent compiler-specific flag."
-
-  , checkVersion [1,4] (not (null mentionedExtensionsThatNeedCabal14)) $
-      PackageDistInexcusable $
-           "Unfortunately the language extensions "
-        ++ commaSep (map (quote . display) mentionedExtensionsThatNeedCabal14)
-        ++ " break the parser in earlier Cabal versions so you need to "
-        ++ "specify 'cabal-version: >= 1.4'. Alternatively if you require "
-        ++ "compatability with earlier Cabal versions then you may be able to "
-        ++ "use an equivalent compiler-specific flag."
+           "Packages must specify the 'default-language' field for each "
+        ++ "component (e.g. Haskell98 or Haskell2010). If a component uses "
+        ++ "different languages in different modules then list the other "
+        ++ "ones in the 'other-languages' field."
   ]
   where
     -- Perform a check on packages that use a version of the spec less than
@@ -1023,23 +832,6 @@ checkCabalVersion pkg =
         [ Dependency (PackageName (display compiler)) vr
         | (compiler, vr) <- testedWith pkg
         , usesNewVersionRangeSyntax vr ]
-
-    simpleSpecVersionRangeSyntax =
-        either (const True)
-               (foldVersionRange'
-                      True
-                      (\_ -> False)
-                      (\_ -> False) (\_ -> False)
-                      (\_ -> True)  -- >=
-                      (\_ -> False)
-                      (\_ _ -> False)
-                      (\_ _ -> False) (\_ _ -> False)
-                      id)
-               (specVersionRaw pkg)
-
-    -- is the cabal-version field a simple version number, rather than a range
-    simpleSpecVersionSyntax =
-      either (const True) (const False) (specVersionRaw pkg)
 
     usesNewVersionRangeSyntax :: VersionRange -> Bool
     usesNewVersionRangeSyntax =
@@ -1076,50 +868,6 @@ checkCabalVersion pkg =
         orLaterVersion orEarlierVersion
         (\v v' -> intersectVersionRanges (orLaterVersion v) (earlierVersion v'))
         intersectVersionRanges unionVersionRanges id
-
-    compatLicenses = [ GPL Nothing, LGPL Nothing, BSD3, BSD4
-                     , PublicDomain, AllRightsReserved, OtherLicense ]
-
-    mentionedExtensions = [ ext | bi <- allBuildInfo pkg
-                                , ext <- allExtensions bi ]
-    mentionedExtensionsThatNeedCabal12 =
-      nub (filter (`elem` compatExtensionsExtra) mentionedExtensions)
-
-    -- As of Cabal-1.4 we can add new extensions without worrying about
-    -- breaking old versions of cabal.
-    mentionedExtensionsThatNeedCabal14 =
-      nub (filter (`notElem` compatExtensions) mentionedExtensions)
-
-    -- The known extensions in Cabal-1.2.3
-    compatExtensions =
-      map EnableExtension
-      [ OverlappingInstances, UndecidableInstances, IncoherentInstances
-      , RecursiveDo, ParallelListComp, MultiParamTypeClasses
-      , FunctionalDependencies, Rank2Types
-      , RankNTypes, PolymorphicComponents, ExistentialQuantification
-      , ScopedTypeVariables, ImplicitParams, FlexibleContexts
-      , FlexibleInstances, EmptyDataDecls, CPP, BangPatterns
-      , TypeSynonymInstances, TemplateHaskell, ForeignFunctionInterface
-      , Arrows, Generics, NamedFieldPuns, PatternGuards
-      , GeneralizedNewtypeDeriving, ExtensibleRecords, RestrictedTypeSynonyms
-      , HereDocuments] ++
-      map DisableExtension
-      [MonomorphismRestriction, ImplicitPrelude] ++
-      compatExtensionsExtra
-
-    -- The extra known extensions in Cabal-1.2.3 vs Cabal-1.1.6
-    -- (Cabal-1.1.6 came with ghc-6.6. Cabal-1.2 came with ghc-6.8)
-    compatExtensionsExtra =
-      map EnableExtension
-      [ KindSignatures, MagicHash, TypeFamilies, StandaloneDeriving
-      , UnicodeSyntax, PatternSignatures, UnliftedFFITypes, LiberalTypeSynonyms
-      , TypeOperators, RecordWildCards, RecordPuns, DisambiguateRecordFields
-      , OverloadedStrings, GADTs, RelaxedPolyRec
-      , ExtendedDefaultRules, UnboxedTuples, DeriveDataTypeable
-      , ConstrainedClassMethods
-      ] ++
-      map DisableExtension
-      [MonoPatBinds]
 
 -- | A variation on the normal 'Text' instance, shows any ()'s in the original
 -- textual syntax. We need to show these otherwise it's confusing to users when

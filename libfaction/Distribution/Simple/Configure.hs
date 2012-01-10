@@ -1,11 +1,3 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.Simple.Configure
--- Copyright   :  Isaac Jones 2003-2005
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
 -- This deals with the /configure/ phase. It provides the 'configure' action
 -- which is given the package description and configure flags. It then tries
 -- to: configure the compiler; resolves any conditionals in the package
@@ -111,7 +103,7 @@ import Distribution.Simple.BuildPaths
     ( autogenModulesDir )
 import Distribution.Simple.Utils
     ( die, warn, info, setupMessage, createDirectoryIfMissingVerbose
-    , intercalate, cabalVersion
+    , intercalate, factionVersion
     , withFileContents, writeFileAtomic
     , withTempFile
     , findFile )
@@ -123,11 +115,6 @@ import Distribution.Verbosity
     ( Verbosity, lessVerbose )
 
 import qualified Distribution.Simple.GHC  as GHC
-import qualified Distribution.Simple.JHC  as JHC
-import qualified Distribution.Simple.LHC  as LHC
-import qualified Distribution.Simple.NHC  as NHC
-import qualified Distribution.Simple.Hugs as Hugs
-import qualified Distribution.Simple.UHC  as UHC
 
 import Control.Monad
     ( when, unless, foldM, filterM, forM )
@@ -174,20 +161,20 @@ tryGetConfigStateFile filename = do
   where
     checkHeader :: String -> Maybe String
     checkHeader header = case parseHeader header of
-      Just (cabalId, compId)
-        | cabalId
-       == currentCabalId -> Nothing
-        | otherwise      -> Just (badVersion cabalId compId)
+      Just (factionId, compId)
+        | factionId
+       == currentFactionId -> Nothing
+        | otherwise      -> Just (badVersion factionId compId)
       Nothing            -> Just cantParse
 
     missing   = "Run the 'configure' command first."
     cantParse = "Saved package config file seems to be corrupt. "
              ++ "Try re-running the 'configure' command."
-    badVersion cabalId compId
+    badVersion factionId compId
               = "You need to re-run the 'configure' command. "
-             ++ "The version of Cabal being used has changed (was "
-             ++ display cabalId ++ ", now "
-             ++ display currentCabalId ++ ")."
+             ++ "The version of Faction being used has changed (was "
+             ++ display factionId ++ ", now "
+             ++ display currentFactionId ++ ")."
              ++ badcompiler compId
     badcompiler compId | compId == currentCompilerId = ""
                        | otherwise
@@ -202,7 +189,7 @@ tryGetPersistBuildConfig distPref
     = tryGetConfigStateFile (localBuildInfoFile distPref)
 
 -- |Read the 'localBuildInfoFile'.  Error if it doesn't exist.  Also
--- fail if the file containing LocalBuildInfo is older than the .cabal
+-- fail if the file containing LocalBuildInfo is older than the .faction
 -- file, indicating that a re-configure is required.
 getPersistBuildConfig :: FilePath -> IO LocalBuildInfo
 getPersistBuildConfig distPref = do
@@ -228,12 +215,12 @@ writePersistBuildConfig distPref lbi = do
 showHeader :: PackageIdentifier -> String
 showHeader pkgid =
      "Saved package config for " ++ display pkgid
-  ++ " written by " ++ display currentCabalId
+  ++ " written by " ++ display currentFactionId
   ++      " using " ++ display currentCompilerId
   where
 
-currentCabalId :: PackageIdentifier
-currentCabalId = PackageIdentifier (PackageName "Cabal") cabalVersion
+currentFactionId :: PackageIdentifier
+currentFactionId = PackageIdentifier (PackageName "Faction") factionVersion
 
 currentCompilerId :: PackageIdentifier
 currentCompilerId = PackageIdentifier (PackageName System.Info.compilerName)
@@ -242,18 +229,18 @@ currentCompilerId = PackageIdentifier (PackageName System.Info.compilerName)
 parseHeader :: String -> Maybe (PackageIdentifier, PackageIdentifier)
 parseHeader header = case words header of
   ["Saved", "package", "config", "for", pkgid,
-   "written", "by", cabalid, "using", compilerid]
+   "written", "by", factionid, "using", compilerid]
     -> case (simpleParse pkgid :: Maybe PackageIdentifier,
-             simpleParse cabalid,
+             simpleParse factionid,
              simpleParse compilerid) of
         (Just _,
-         Just cabalid',
-         Just compilerid') -> Just (cabalid', compilerid')
+         Just factionid',
+         Just compilerid') -> Just (factionid', compilerid')
         _                  -> Nothing
   _                        -> Nothing
 
 -- |Check that localBuildInfoFile is up-to-date with respect to the
--- .cabal file.
+-- .faction file.
 checkPersistBuildConfigOutdated :: FilePath -> FilePath -> IO Bool
 checkPersistBuildConfigOutdated distPref pkg_descr_file = do
   t0 <- getModificationTime pkg_descr_file
@@ -301,7 +288,7 @@ configure (pkg_descr0, pbi) cfg
         -- case an executable should refer to any of them as dependencies.
         --
         -- It must be *any libraries that might be* defined rather than the
-        -- actual definitions, because these depend on conditionals in the .cabal
+        -- actual definitions, because these depend on conditionals in the .facion
         -- file, and we haven't resolved them yet.  finalizePackageDescription
         -- does the resolution of conditionals, and it takes internalPackageSet
         -- as part of its input.
@@ -310,7 +297,7 @@ configure (pkg_descr0, pbi) cfg
         -- the same name as the package) but we could extend this later.
         -- If we later allowed private internal libraries, then here we would
         -- need to pre-scan the conditional data to make a list of all private
-        -- libraries that could possibly be defined by the .cabal file.
+        -- libraries that could possibly be defined by the .faction file.
         let pid = packageId pkg_descr0
             internalPackage = emptyInstalledPackageInfo {
                 --TODO: should use a per-compiler method to map the source
@@ -381,7 +368,7 @@ configure (pkg_descr0, pbi) cfg
                ++ intercalate ", " (map (display . packageName) internalPkgDeps)
                ++ "' refers to a library which is defined within the same "
                ++ "package. To use this feature the package must specify at "
-               ++ "least 'cabal-version: >= 1.8'."
+               ++ "least 'faction-version: >= 1.8'."
 
         reportFailedDependencies failedDeps
         reportSelectedDependencies verbosity allPkgDeps
@@ -571,7 +558,7 @@ configure (pkg_descr0, pbi) cfg
         unless (isAbsolute (prefix dirs)) $ die $
             "expected an absolute directory name for --prefix: " ++ prefix dirs
 
-        info verbosity $ "Using " ++ display currentCabalId
+        info verbosity $ "Using " ++ display currentFactionId
                       ++ " compiled by " ++ display currentCompilerId
         info verbosity $ "Using compiler: " ++ showCompilerId comp
         info verbosity $ "Using install prefix: " ++ prefix dirs
@@ -692,11 +679,6 @@ getInstalledPackages verbosity comp packageDBs progconf = do
   info verbosity "Reading installed packages..."
   case compilerFlavor comp of
     GHC -> GHC.getInstalledPackages verbosity packageDBs progconf
-    Hugs->Hugs.getInstalledPackages verbosity packageDBs progconf
-    JHC -> JHC.getInstalledPackages verbosity packageDBs progconf
-    LHC -> LHC.getInstalledPackages verbosity packageDBs progconf
-    NHC -> NHC.getInstalledPackages verbosity packageDBs progconf
-    UHC -> UHC.getInstalledPackages verbosity comp packageDBs progconf
     flv -> die $ "don't know how to find the installed packages for "
               ++ display flv
 
@@ -717,9 +699,9 @@ implicitPackageDbStack userInstall maybePackageDB
 newPackageDepsBehaviourMinVersion :: Version
 newPackageDepsBehaviourMinVersion = Version { versionBranch = [1,7,1], versionTags = [] }
 
--- In older cabal versions, there was only one set of package dependencies for
+-- In older faction versions, there was only one set of package dependencies for
 -- the whole package. In this version, we can have separate dependencies per
--- target, but we only enable this behaviour if the minimum cabal version
+-- target, but we only enable this behaviour if the minimum faction version
 -- specified is >= a certain minimum. Otherwise, for compatibility we use the
 -- old behaviour.
 newPackageDepsBehaviour :: PackageDescription -> Bool
@@ -853,12 +835,6 @@ configCompiler Nothing _ _ _ _ = die "Unknown compiler"
 configCompiler (Just hcFlavor) hcPath hcPkg conf verbosity = do
   case hcFlavor of
       GHC  -> GHC.configure  verbosity hcPath hcPkg conf
-      JHC  -> JHC.configure  verbosity hcPath hcPkg conf
-      LHC  -> do (_,ghcConf) <- GHC.configure  verbosity Nothing hcPkg conf
-                 LHC.configure  verbosity hcPath Nothing ghcConf
-      Hugs -> Hugs.configure verbosity hcPath hcPkg conf
-      NHC  -> NHC.configure  verbosity hcPath hcPkg conf
-      UHC  -> UHC.configure  verbosity hcPath hcPkg conf
       _    -> die "Unknown compiler"
 
 

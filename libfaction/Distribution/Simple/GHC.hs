@@ -76,7 +76,7 @@ import qualified Distribution.Simple.GHC.IPI641 as IPI641
 import qualified Distribution.Simple.GHC.IPI642 as IPI642
 import Distribution.PackageDescription as PD
          ( PackageDescription(..), BuildInfo(..), Executable(..)
-         , Library(..), libModules, hcOptions, usedExtensions, allExtensions
+         , Library(..), libModules, hcOptions, allExtensions
          , ObjcGCMode(..) )
 import Distribution.InstalledPackageInfo
          ( InstalledPackageInfo )
@@ -939,7 +939,7 @@ ghcOptions lbi bi clbi odir
            PD.ObjcGCMandatory -> ["-optc-fobjc-gc-only"])
      ++ hcOptions GHC bi
      ++ languageToFlags   (compiler lbi) (defaultLanguage bi)
-     ++ extensionsToFlags (compiler lbi) (usedExtensions bi)
+     ++ extensionsToFlags (compiler lbi) (defaultExtensions bi)
     where
       ghcVer = compilerVersion (compiler lbi)
 

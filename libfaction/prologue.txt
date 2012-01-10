@@ -1,0 +1,7 @@
+Faction is the common architecture for building applications and
+libraries.  It is a framework which defines a common interface for
+authors to more easily build their applications in a portable way.
+Faction is meant to be a part of a larger infrastructure for
+distributing, organizing, and cataloging Haskell Libraries and
+Tools. For more information, please see:
+<http://www.haskell.org/cabal/>.

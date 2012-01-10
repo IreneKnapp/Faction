@@ -61,11 +61,6 @@ import Distribution.Simple.Compiler
 import Distribution.Simple.Setup (CopyFlags(..), CopyDest(..), fromFlag)
 
 import qualified Distribution.Simple.GHC  as GHC
-import qualified Distribution.Simple.NHC  as NHC
-import qualified Distribution.Simple.JHC  as JHC
-import qualified Distribution.Simple.LHC  as LHC
-import qualified Distribution.Simple.Hugs as Hugs
-import qualified Distribution.Simple.UHC  as UHC
 
 import Control.Monad (when, unless)
 import System.Directory
@@ -155,21 +150,6 @@ install pkg_descr lbi flags = do
                   GHC.installLib verbosity lbi libPref dynlibPref buildPref pkg_descr
                 withExe pkg_descr $
                   GHC.installExe verbosity lbi installDirs buildPref (progPrefixPref, progSuffixPref) pkg_descr
-     LHC  -> do withLib pkg_descr $
-                  LHC.installLib verbosity lbi libPref dynlibPref buildPref pkg_descr
-                withExe pkg_descr $
-                  LHC.installExe verbosity lbi installDirs buildPref (progPrefixPref, progSuffixPref) pkg_descr
-     JHC  -> do withLib pkg_descr $
-                  JHC.installLib verbosity libPref buildPref pkg_descr
-                withExe pkg_descr $
-                  JHC.installExe verbosity binPref buildPref (progPrefixPref, progSuffixPref) pkg_descr
-     Hugs -> do
-       let targetProgPref = progdir (absoluteInstallDirs pkg_descr lbi NoCopyDest)
-       let scratchPref = scratchDir lbi
-       Hugs.install verbosity lbi libPref progPref binPref targetProgPref scratchPref (progPrefixPref, progSuffixPref) pkg_descr
-     NHC  -> do withLib pkg_descr $ NHC.installLib verbosity libPref buildPref (packageId pkg_descr)
-                withExe pkg_descr $ NHC.installExe verbosity binPref buildPref (progPrefixPref, progSuffixPref)
-     UHC  -> do withLib pkg_descr $ UHC.installLib verbosity lbi libPref dynlibPref buildPref pkg_descr
      _    -> die $ "installing with "
                 ++ display (compilerFlavor (compiler lbi))
                 ++ " is not implemented"

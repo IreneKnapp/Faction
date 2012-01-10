@@ -77,7 +77,7 @@ module Distribution.Simple (
         -- ** Standard sets of hooks
         simpleUserHooks,
         autoconfUserHooks,
-        defaultUserHooks, emptyUserHooks,
+        emptyUserHooks,
         -- ** Utils
         defaultHookedPackageDesc
   ) where
@@ -120,7 +120,7 @@ import Distribution.Simple.Haddock (haddock, hscolour)
 import Distribution.Simple.Utils
          (die, notice, info, warn, setupMessage, chattyTry,
           defaultPackageDesc, defaultHookedPackageDesc,
-          rawSystemExitWithEnv, cabalVersion, topHandler )
+          rawSystemExitWithEnv, factionVersion, topHandler )
 import Distribution.System
          ( OS(..), buildOS )
 import Distribution.Verbosity
@@ -141,7 +141,7 @@ import Distribution.Compat.Exception (catchIO, throwIOIO)
 import Control.Monad   (when)
 import Data.List       (intersperse, unionBy, nub, (\\))
 
--- | A simple implementation of @main@ for a Cabal setup script.
+-- | A simple implementation of @main@ for a Faction setup script.
 -- It reads the package description file using IO, and performs the
 -- action specified on the command line.
 defaultMain :: IO ()
@@ -189,9 +189,9 @@ defaultMainHelper hooks args = topHandler $
     printErrors errs = do
       putStr (concat (intersperse "\n" errs))
       exitWith (ExitFailure 1)
-    printNumericVersion = putStrLn $ display cabalVersion
-    printVersion        = putStrLn $ "Cabal library version "
-                                  ++ display cabalVersion
+    printNumericVersion = putStrLn $ display factionVersion
+    printVersion        = putStrLn $ "Faction library version "
+                                  ++ display factionVersion
 
     progs = addKnownPrograms (hookedPrograms hooks) defaultProgramConfiguration
     commands =
@@ -211,7 +211,7 @@ defaultMainHelper hooks args = topHandler $
       ]
 
 -- | Combine the preprocessors in the given hooks with the
--- preprocessors built into cabal.
+-- preprocessors built into faction.
 allSuffixHandlers :: UserHooks
                   -> [PPSuffixHandler]
 allSuffixHandlers hooks
@@ -236,7 +236,7 @@ configureAction hooks flags args = do
 
                 localbuildinfo0 <- confHook hooks epkg_descr flags
 
-                -- remember the .cabal filename if we know it
+                -- remember the .faction filename if we know it
                 -- and all the extra command line args
                 let localbuildinfo = localbuildinfo0 {
                                        pkgDescrFile = mb_pd_file,
@@ -545,35 +545,6 @@ simpleUserHooks =
 --
 -- Thus @configure@ can use local system information to generate
 -- /package/@.buildinfo@ and possibly other files.
-
-{-# DEPRECATED defaultUserHooks
-     "Use simpleUserHooks or autoconfUserHooks, unless you need Cabal-1.2\n             compatibility in which case you must stick with defaultUserHooks" #-}
-defaultUserHooks :: UserHooks
-defaultUserHooks = autoconfUserHooks {
-          confHook = \pkg flags -> do
-                       let verbosity = fromFlag (configVerbosity flags)
-                       warn verbosity $
-                         "defaultUserHooks in Setup script is deprecated."
-                       confHook autoconfUserHooks pkg flags,
-          postConf = oldCompatPostConf
-    }
-    -- This is the annoying old version that only runs configure if it exists.
-    -- It's here for compatibility with existing Setup.hs scripts. See:
-    -- http://hackage.haskell.org/trac/hackage/ticket/165
-    where oldCompatPostConf args flags pkg_descr lbi
-              = do let verbosity = fromFlag (configVerbosity flags)
-                   noExtraFlags args
-                   confExists <- doesFileExist "configure"
-                   when confExists $
-                       runConfigureScript verbosity
-                         backwardsCompatHack flags lbi
-
-                   pbi <- getHookedBuildInfo verbosity
-                   sanityCheckHookedBuildInfo pkg_descr pbi
-                   let pkg_descr' = updatePackageDescription pbi pkg_descr
-                   postConf simpleUserHooks args flags pkg_descr' lbi
-
-          backwardsCompatHack = True
 
 autoconfUserHooks :: UserHooks
 autoconfUserHooks

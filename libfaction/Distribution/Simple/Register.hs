@@ -69,9 +69,6 @@ import Distribution.Simple.LocalBuildInfo
          , InstallDirs(..), absoluteInstallDirs )
 import Distribution.Simple.BuildPaths (haddockName)
 import qualified Distribution.Simple.GHC  as GHC
-import qualified Distribution.Simple.LHC  as LHC
-import qualified Distribution.Simple.Hugs as Hugs
-import qualified Distribution.Simple.UHC  as UHC
 import Distribution.Simple.Compiler
          ( compilerVersion, CompilerFlavor(..), compilerFlavor
          , PackageDBStack, registrationPackageDB )
@@ -215,11 +212,6 @@ registerPackage verbosity installedPkgInfo pkg lbi inplace packageDbs = do
   setupMessage verbosity "Registering" (packageId pkg)
   case compilerFlavor (compiler lbi) of
     GHC  -> GHC.registerPackage  verbosity installedPkgInfo pkg lbi inplace packageDbs
-    LHC  -> LHC.registerPackage  verbosity installedPkgInfo pkg lbi inplace packageDbs
-    Hugs -> Hugs.registerPackage verbosity installedPkgInfo pkg lbi inplace packageDbs
-    UHC  -> UHC.registerPackage  verbosity installedPkgInfo pkg lbi inplace packageDbs
-    JHC  -> notice verbosity "Registering for jhc (nothing to do)"
-    NHC  -> notice verbosity "Registering for nhc98 (nothing to do)"
     _    -> die "Registering is not implemented for this compiler"
 
 

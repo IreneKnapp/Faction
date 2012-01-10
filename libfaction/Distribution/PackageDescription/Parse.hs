@@ -1,45 +1,9 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.PackageDescription.Parse
--- Copyright   :  Isaac Jones 2003-2005
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
--- This defined parsers and partial pretty printers for the @.cabal@ format.
--- Some of the complexity in this module is due to the fact that we have to be
--- backwards compatible with old @.cabal@ files, so there's code to translate
--- into the newer structure.
-
-{- All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Isaac Jones nor the names of other
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
+{-
+This defines parsers and partial pretty printers for the @.faction@ format.
+Some of the complexity in this module is due to the fact that we have to be
+backwards compatible with old @.faction@ files, so there's code to translate
+into the newer structure.
+-}
 
 module Distribution.PackageDescription.Parse (
         -- * Package descriptions
@@ -93,7 +57,7 @@ import Distribution.Verbosity (Verbosity)
 import Distribution.Compiler  (CompilerFlavor(..))
 import Distribution.PackageDescription.Configuration (parseCondition, freeVars)
 import Distribution.Simple.Utils
-         ( die, dieWithLocation, warn, intercalate, lowercase, cabalVersion
+         ( die, dieWithLocation, warn, intercalate, lowercase, factionVersion
          , withFileContents, withUTF8FileContents
          , writeFileAtomic, writeUTF8File )
 
@@ -109,9 +73,9 @@ pkgDescrFieldDescrs =
  , simpleField "version"
            disp                   parse
            packageVersion         (\ver pkg -> pkg{package=(package pkg){pkgVersion=ver}})
- , simpleField "cabal-version"
-           (either disp disp)     (liftM Left parse +++ liftM Right parse)
-           specVersionRaw         (\v pkg -> pkg{specVersionRaw=v})
+ , simpleField "faction-version"
+           disp                   parse
+           specVersion            (\v pkg -> pkg{specVersion=v})
  , simpleField "build-type"
            (maybe empty disp)     (fmap Just parse)
            buildType              (\t pkg -> pkg{buildType=t})
@@ -423,9 +387,6 @@ binfoFieldDescrs =
  , listField   "other-extensions"
            disp               parseExtensionQ
            otherExtensions    (\exts  binfo -> binfo{otherExtensions=exts})
- , listField   "extensions"
-           disp               parseExtensionQ
-           oldExtensions      (\exts  binfo -> binfo{oldExtensions=exts})
 
  , listField   "extra-libraries"
            showToken          parseTokenQ
@@ -639,18 +600,8 @@ skipField = modify tail
 -- decode UTF8 and handle the BOM.
 
 -- | Parses the given file into a 'GenericPackageDescription'.
---
--- In Cabal 1.2 the syntax for package descriptions was changed to a format
--- with sections and possibly indented property descriptions.
 parsePackageDescription :: String -> ParseResult GenericPackageDescription
 parsePackageDescription file = do
-
-    -- This function is quite complex because it needs to be able to parse
-    -- both pre-Cabal-1.2 and post-Cabal-1.2 files.  Additionally, it contains
-    -- a lot of parser-related noise since we do not want to depend on Parsec.
-    --
-    -- If we detect an pre-1.2 file we implicitly convert it to post-1.2
-    -- style.  See 'sectionizeFields' below for details about the conversion.
 
     fields0 <- readFields file `catchParseError` \err ->
                  let tabs = findIndentTabs file in
@@ -663,23 +614,21 @@ parsePackageDescription file = do
                                                 , lineNo' >= tabLineNo ]
                    _ -> parseFail err
 
-    let cabalVersionNeeded =
+    let factionVersionNeeded =
           head $ [ minVersionBound versionRange
                  | Just versionRange <- [ simpleParse v
-                                        | F _ "cabal-version" v <- fields0 ] ]
+                                        | F _ "faction-version" v <- fields0 ] ]
               ++ [Version [0] []]
         minVersionBound versionRange =
           case asVersionIntervals versionRange of
             []                            -> Version [0] []
             ((LowerBound version _, _):_) -> version
 
-    handleFutureVersionParseFailure cabalVersionNeeded $ do
-
-      let sf = sectionizeFields fields0  -- ensure 1.2 format
+    handleFutureVersionParseFailure factionVersionNeeded $ do
 
         -- figure out and warn about deprecated stuff (warnings are collected
         -- inside our parsing monad)
-      fields <- mapSimpleFields deprecField sf
+      fields <- mapSimpleFields deprecField fields0
 
         -- Our parsing monad takes the not-yet-parsed fields as its state.
         -- After each successful parse we remove the field from the state
@@ -708,91 +657,26 @@ parsePackageDescription file = do
           -- flags, lib and exe sections.
         (repos, flags, mlib, exes, tests, bms) <- getBody
         warnIfRest  -- warn if getBody did not parse up to the last field.
-          -- warn about using old/new syntax with wrong cabal-version:
-        maybeWarnCabalVersion (not $ oldSyntax fields0) pkg
         checkForUndefinedFlags flags mlib exes tests
         return $ GenericPackageDescription
                    pkg { sourceRepos = repos }
                    flags mlib exes tests bms
 
   where
-    oldSyntax flds = all isSimpleField flds
     reportTabsError tabs =
         syntaxError (fst (head tabs)) $
           "Do not use tabs for indentation (use spaces instead)\n"
           ++ "  Tabs were used at (line,column): " ++ show tabs
 
-    maybeWarnCabalVersion newsyntax pkg
-      | newsyntax && specVersion pkg < Version [1,2] []
-      = lift $ warning $
-             "A package using section syntax must specify at least\n"
-          ++ "'cabal-version: >= 1.2'."
-
-    maybeWarnCabalVersion newsyntax pkg
-      | not newsyntax && specVersion pkg >= Version [1,2] []
-      = lift $ warning $
-             "A package using 'cabal-version: "
-          ++ displaySpecVersion (specVersionRaw pkg)
-          ++ "' must use section syntax. See the Cabal user guide for details."
-      where
-        displaySpecVersion (Left version)       = display version
-        displaySpecVersion (Right versionRange) =
-          case asVersionIntervals versionRange of
-            [] {- impossible -}           -> display versionRange
-            ((LowerBound version _, _):_) -> display (orLaterVersion version)
-
-    maybeWarnCabalVersion _ _ = return ()
-
-
-    handleFutureVersionParseFailure cabalVersionNeeded parseBody =
+    handleFutureVersionParseFailure factionVersionNeeded parseBody =
       (unless versionOk (warning message) >> parseBody)
         `catchParseError` \parseError -> case parseError of
         TabsError _   -> parseFail parseError
         _ | versionOk -> parseFail parseError
           | otherwise -> fail message
-      where versionOk = cabalVersionNeeded <= cabalVersion
-            message   = "This package requires at least Cabal version "
-                     ++ display cabalVersionNeeded
-
-    -- "Sectionize" an old-style Cabal file.  A sectionized file has:
-    --
-    --  * all global fields at the beginning, followed by
-    --
-    --  * all flag declarations, followed by
-    --
-    --  * an optional library section, and an arbitrary number of executable
-    --    sections (in any order).
-    --
-    -- The current implementatition just gathers all library-specific fields
-    -- in a library section and wraps all executable stanzas in an executable
-    -- section.
-    sectionizeFields :: [Field] -> [Field]
-    sectionizeFields fs
-      | oldSyntax fs =
-          let
-            -- "build-depends" is a local field now.  To be backwards
-            -- compatible, we still allow it as a global field in old-style
-            -- package description files and translate it to a local field by
-            -- adding it to every non-empty section
-            (hdr0, exes0) = break ((=="executable") . fName) fs
-            (hdr, libfs0) = partition (not . (`elem` libFieldNames) . fName) hdr0
-
-            (deps, libfs) = partition ((== "build-depends") . fName)
-                                       libfs0
-
-            exes = unfoldr toExe exes0
-            toExe [] = Nothing
-            toExe (F l e n : r)
-              | e == "executable" =
-                  let (efs, r') = break ((=="executable") . fName) r
-                  in Just (Section l "executable" n (deps ++ efs), r')
-            toExe _ = bug "unexpeced input to 'toExe'"
-          in
-            hdr ++
-           (if null libfs then []
-            else [Section (lineNo (head libfs)) "library" "" (deps ++ libfs)])
-            ++ exes
-      | otherwise = fs
+      where versionOk = factionVersionNeeded <= factionVersion
+            message   = "This package requires at least Faction version "
+                     ++ display factionVersionNeeded
 
     isSimpleField (F _ _ _) = True
     isSimpleField _ = False
