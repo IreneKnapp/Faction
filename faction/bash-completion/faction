@@ -1,9 +1,9 @@
-# cabal command line completion
+# faction command line completion
 # Copyright 2007-2008 "Lennart Kolmodin" <kolmodin@gentoo.org>
 #                     "Duncan Coutts"     <dcoutts@gentoo.org>
 #
 
-_cabal()
+_faction()
 {
     # get the word currently being completed
     local cur
@@ -21,4 +21,4 @@ _cabal()
     COMPREPLY=( $( compgen -W "$( ${cmd[@]} )" -- $cur ) )
 }
 
-complete -F _cabal -o default cabal
+complete -F _faction -o default faction
