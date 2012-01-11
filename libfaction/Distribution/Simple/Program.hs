@@ -86,14 +86,6 @@ module Distribution.Simple.Program (
     -- * Programs that Cabal knows about
     , ghcProgram
     , ghcPkgProgram
-    , lhcProgram
-    , lhcPkgProgram
-    , nhcProgram
-    , hmakeProgram
-    , jhcProgram
-    , hugsProgram
-    , ffihugsProgram
-    , uhcProgram
     , gccProgram
     , ranlibProgram
     , arProgram
@@ -108,6 +100,8 @@ module Distribution.Simple.Program (
     , greencardProgram
     , ldProgram
     , tarProgram
+    , touchProgram
+    , ibtoolProgram
     , cppProgram
     , pkgConfigProgram
     , hpcProgram

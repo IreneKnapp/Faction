@@ -26,6 +26,7 @@ module Distribution.PackageDescription.Parse (
         pkgDescrFieldDescrs,
         libFieldDescrs,
         executableFieldDescrs,
+        appFieldDescrs,
         binfoFieldDescrs,
         sourceRepoFieldDescrs,
         testSuiteFieldDescrs,
@@ -181,6 +182,42 @@ storeXFieldsExe :: UnrecFieldParser Executable
 storeXFieldsExe (f@('x':'-':_), val) e@(Executable { buildInfo = bi }) =
     Just $ e {buildInfo = bi{ customFieldsBI = (f,val):(customFieldsBI bi)}}
 storeXFieldsExe _ _ = Nothing
+
+
+-- ---------------------------------------------------------------------------
+-- The App type
+
+
+appFieldDescrs :: [FieldDescr App]
+appFieldDescrs =
+  [ -- note ordering: configuration must come first, for
+    -- showPackageDescription.
+    simpleField "app"
+      showToken                   parseTokenQ
+      appName                     (\xs    app -> app{appName=xs})
+  , simpleField "main-is"
+      showFilePath                parseFilePathQ
+      appModulePath               (\xs    app -> app{appModulePath=xs})
+  , simpleField "info-plist"
+      showFilePath                parseFilePathQ
+      appInfoPlist                (\xs    app -> app{appInfoPlist=xs})
+  , simpleField "resource-directory"
+      (maybe empty showFilePath)  (fmap Just parseFilePathQ)
+      appResourceDirectory        (\path app -> app{appResourceDirectory=path})
+  , listField   "xibs"
+      showFilePath                parseFilePathQ
+      appXIBs                     (\paths app -> app{appXIBs=paths})
+  , listField   "other-resources"
+      showFilePath                parseFilePathQ
+      appOtherResources           (\paths app -> app{appOtherResources=paths})
+  ]
+  ++ map biToApp binfoFieldDescrs
+  where biToApp = liftField appBuildInfo (\bi app -> app{appBuildInfo=bi})
+
+storeXFieldsApp :: UnrecFieldParser App
+storeXFieldsApp (f@('x':'-':_), val) a@(App { appBuildInfo = bi }) =
+    Just $ a {appBuildInfo = bi{ customFieldsBI = (f,val):(customFieldsBI bi)}}
+storeXFieldsApp _ _ = Nothing
 
 -- ---------------------------------------------------------------------------
 -- The TestSuite type
@@ -419,12 +456,6 @@ binfoFieldDescrs =
            ghcSharedOptions      (\val binfo -> binfo{ghcSharedOptions=val})
  , optsField   "ghc-options"  GHC
            options            (\path  binfo -> binfo{options=path})
- , optsField   "hugs-options" Hugs
-           options            (\path  binfo -> binfo{options=path})
- , optsField   "nhc98-options"  NHC
-           options            (\path  binfo -> binfo{options=path})
- , optsField   "jhc-options"  JHC
-           options            (\path  binfo -> binfo{options=path})
  ]
 
 storeXFieldsBI :: UnrecFieldParser BuildInfo
@@ -639,13 +670,13 @@ parsePackageDescription file = do
                                   header_fields
 
           -- 'getBody' assumes that the remaining fields only consist of
-          -- flags, lib and exe sections.
-        (repos, flags, mlib, exes, tests, bms) <- getBody
+          -- sections we know about.
+        (repos, flags, mlib, exes, apps, tests, bms) <- getBody
         warnIfRest  -- warn if getBody did not parse up to the last field.
-        checkForUndefinedFlags flags mlib exes tests
+        checkForUndefinedFlags flags mlib exes apps tests
         return $ GenericPackageDescription
                    pkg { sourceRepos = repos }
-                   flags mlib exes tests bms
+                   flags mlib exes apps tests bms
 
   where
     reportTabsError tabs =
@@ -686,6 +717,7 @@ parsePackageDescription file = do
     getBody :: PM ([SourceRepo], [Flag]
                   ,Maybe (CondTree ConfVar [Dependency] Library)
                   ,[(String, CondTree ConfVar [Dependency] Executable)]
+                  ,[(String, CondTree ConfVar [Dependency] App)]
                   ,[(String, CondTree ConfVar [Dependency] TestSuite)]
                   ,[(String, CondTree ConfVar [Dependency] Benchmark)])
     getBody = peekField >>= \mf -> case mf of
@@ -696,9 +728,18 @@ parsePackageDescription file = do
             exename <- lift $ runP line_no "executable" parseTokenQ sec_label
             flds <- collectFields parseExeFields sec_fields
             skipField
-            (repos, flags, lib, exes, tests, bms) <- getBody
-            return (repos, flags, lib, (exename, flds): exes, tests, bms)
+            (repos, flags, lib, exes, apps, tests, bms) <- getBody
+            return (repos, flags, lib, (exename, flds): exes, apps, tests, bms)
 
+        | sec_type == "app" -> do
+            when (null sec_label) $ lift $ syntaxError line_no
+              "'app' needs one argument (the app's name)"
+            appname <- lift $ runP line_no "app" parseTokenQ sec_label
+            flds <- collectFields parseAppFields sec_fields
+            skipField
+            (repos, flags, lib, exes, apps, tests, bms) <- getBody
+            return (repos, flags, lib, exes, (appname, flds): apps, tests, bms)
+            
         | sec_type == "test-suite" -> do
             when (null sec_label) $ lift $ syntaxError line_no
                 "'test-suite' needs one argument (the test suite's name)"
@@ -738,8 +779,8 @@ parsePackageDescription file = do
             if checkTestType emptyTestSuite flds
                 then do
                     skipField
-                    (repos, flags, lib, exes, tests, bms) <- getBody
-                    return (repos, flags, lib, exes, (testname, flds) : tests, bms)
+                    (repos, flags, lib, exes, apps, tests, bms) <- getBody
+                    return (repos, flags, lib, exes, apps, (testname, flds) : tests, bms)
                 else lift $ syntaxError line_no $
                          "Test suite \"" ++ testname
                       ++ "\" is missing required field \"type\" or the field "
@@ -786,8 +827,8 @@ parsePackageDescription file = do
             if checkBenchmarkType emptyBenchmark flds
                 then do
                     skipField
-                    (repos, flags, lib, exes, tests, bms) <- getBody
-                    return (repos, flags, lib, exes, tests, (benchname, flds) : bms)
+                    (repos, flags, lib, exes, apps, tests, bms) <- getBody
+                    return (repos, flags, lib, exes, apps, tests, (benchname, flds) : bms)
                 else lift $ syntaxError line_no $
                          "Benchmark \"" ++ benchname
                       ++ "\" is missing required field \"type\" or the field "
@@ -800,10 +841,10 @@ parsePackageDescription file = do
               syntaxError line_no "'library' expects no argument"
             flds <- collectFields parseLibFields sec_fields
             skipField
-            (repos, flags, lib, exes, tests, bms) <- getBody
+            (repos, flags, lib, exes, apps, tests, bms) <- getBody
             when (isJust lib) $ lift $ syntaxError line_no
               "There can only be one library section in a package description."
-            return (repos, flags, Just flds, exes, tests, bms)
+            return (repos, flags, Just flds, exes, apps, tests, bms)
 
         | sec_type == "flag" -> do
             when (null sec_label) $ lift $
@@ -814,8 +855,8 @@ parsePackageDescription file = do
                     (MkFlag (FlagName (lowercase sec_label)) "" True False)
                     sec_fields
             skipField
-            (repos, flags, lib, exes, tests, bms) <- getBody
-            return (repos, flag:flags, lib, exes, tests, bms)
+            (repos, flags, lib, exes, apps, tests, bms) <- getBody
+            return (repos, flag:flags, lib, exes, apps, tests, bms)
 
         | sec_type == "source-repository" -> do
             when (null sec_label) $ lift $ syntaxError line_no $
@@ -839,8 +880,8 @@ parsePackageDescription file = do
                     })
                     sec_fields
             skipField
-            (repos, flags, lib, exes, tests, bms) <- getBody
-            return (repo:repos, flags, lib, exes, tests, bms)
+            (repos, flags, lib, exes, apps, tests, bms) <- getBody
+            return (repo:repos, flags, lib, exes, apps, tests, bms)
 
         | otherwise -> do
             lift $ warning $ "Ignoring unknown section type: " ++ sec_type
@@ -851,7 +892,7 @@ parsePackageDescription file = do
               "Construct not supported at this position: " ++ show f
             skipField
             getBody
-      Nothing -> return ([], [], Nothing, [], [], [])
+      Nothing -> return ([], [], Nothing, [], [], [], [])
 
     -- Extracts all fields in a block and returns a 'CondTree'.
     --
@@ -892,7 +933,11 @@ parsePackageDescription file = do
     -- Note: we don't parse the "executable" field here, hence the tail hack.
     parseExeFields :: [Field] -> PM Executable
     parseExeFields = lift . parseFields (tail executableFieldDescrs) storeXFieldsExe emptyExecutable
-
+    
+    -- Note: we don't parse the "app" field here, hence the tail hack.
+    parseAppFields :: [Field] -> PM App
+    parseAppFields = lift . parseFields (tail appFieldDescrs) storeXFieldsApp emptyApp
+    
     parseTestFields :: LineNo -> [Field] -> PM TestSuite
     parseTestFields line fields = do
         x <- lift $ parseFields testSuiteFieldDescrs storeXFieldsTest
@@ -909,12 +954,14 @@ parsePackageDescription file = do
         [Flag] ->
         Maybe (CondTree ConfVar [Dependency] Library) ->
         [(String, CondTree ConfVar [Dependency] Executable)] ->
+        [(String, CondTree ConfVar [Dependency] App)] ->
         [(String, CondTree ConfVar [Dependency] TestSuite)] ->
         PM ()
-    checkForUndefinedFlags flags mlib exes tests = do
+    checkForUndefinedFlags flags mlib exes apps tests = do
         let definedFlags = map flagName flags
         maybe (return ()) (checkCondTreeFlags definedFlags) mlib
         mapM_ (checkCondTreeFlags definedFlags . snd) exes
+        mapM_ (checkCondTreeFlags definedFlags . snd) apps
         mapM_ (checkCondTreeFlags definedFlags . snd) tests
 
     checkCondTreeFlags :: [FlagName] -> CondTree ConfVar c a -> PM ()
@@ -1028,10 +1075,12 @@ showPackageDescription pkg = render $
         Nothing  -> empty
         Just lib -> ppLibrary lib)
   $$ vcat [ space $$ ppExecutable exe | exe <- executables pkg ]
+  $$ vcat [ space $$ ppApp app | app <- apps pkg ]
   where
     ppPackage    = ppFields pkgDescrFieldDescrs
     ppLibrary    = ppFields libFieldDescrs
     ppExecutable = ppFields executableFieldDescrs
+    ppApp        = ppFields appFieldDescrs
 
 ppCustomFields :: [(String,String)] -> Doc
 ppCustomFields flds = vcat (map ppCustomField flds)

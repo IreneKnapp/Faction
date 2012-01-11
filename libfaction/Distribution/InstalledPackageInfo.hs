@@ -11,7 +11,7 @@
 -- a package.  @ghc-pkg@ now consumes this package format (as of version
 -- 6.4). This is specific to GHC at the moment.
 --
--- The @.cabal@ file format is for describing a package that is not yet
+-- The @.faction@ file format is for describing a package that is not yet
 -- installed. It has a lot of flexibility, like conditionals and dependency
 -- ranges. As such, that format is not at all suitable for describing a package
 -- that has already been built and installed. By the time we get to that stage,
@@ -19,7 +19,7 @@
 -- constraints to exact versions of dependent packages. So, this module defines
 -- the 'InstalledPackageInfo' data structure that contains all the info we keep
 -- about an installed package. There is a parser and pretty printer. The
--- textual format is rather simpler than the @.cabal@ format: there are no
+-- textual format is rather simpler than the @.faction@ format: there are no
 -- sections, for example.
 
 {- All rights reserved.
@@ -115,7 +115,6 @@ data InstalledPackageInfo_ m
         includeDirs       :: [FilePath],
         includes          :: [String],
         depends           :: [InstalledPackageId],
-        hugsOptions       :: [String],
         ccOptions         :: [String],
         ldOptions         :: [String],
         frameworkDirs     :: [FilePath],
@@ -157,7 +156,6 @@ emptyInstalledPackageInfo
         includeDirs       = [],
         includes          = [],
         depends           = [],
-        hugsOptions       = [],
         ccOptions         = [],
         ldOptions         = [],
         frameworkDirs     = [],
@@ -270,9 +268,6 @@ installedFieldDescrs = [
  , listField   "depends"
         disp               parse
         depends            (\xs pkg -> pkg{depends=xs})
- , listField   "hugs-options"
-        showToken          parseTokenQ
-        hugsOptions        (\path  pkg -> pkg{hugsOptions=path})
  , listField   "cc-options"
         showToken          parseTokenQ
         ccOptions          (\path  pkg -> pkg{ccOptions=path})

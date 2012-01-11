@@ -62,7 +62,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
 
 module Distribution.Simple.GHC (
         configure, getInstalledPackages,
-        buildLib, buildExe,
+        buildLib, buildExe, buildApp,
         installLib, installExe,
         libAbiHash,
         registerPackage,
@@ -72,10 +72,8 @@ module Distribution.Simple.GHC (
         ghcLibDir,
  ) where
 
-import qualified Distribution.Simple.GHC.IPI641 as IPI641
-import qualified Distribution.Simple.GHC.IPI642 as IPI642
 import Distribution.PackageDescription as PD
-         ( PackageDescription(..), BuildInfo(..), Executable(..)
+         ( PackageDescription(..), BuildInfo(..), Executable(..), App(..)
          , Library(..), libModules, hcOptions, allExtensions
          , ObjcGCMode(..) )
 import Distribution.InstalledPackageInfo
@@ -99,11 +97,11 @@ import Distribution.Simple.Program
          ( Program(..), ConfiguredProgram(..), ProgramConfiguration, ProgArg
          , ProgramLocation(..), rawSystemProgram, rawSystemProgramConf
          , rawSystemProgramStdout, rawSystemProgramStdoutConf
-         , requireProgramVersion, requireProgram, getProgramOutput
+         , requireProgramVersion, requireProgram, runProgram, getProgramOutput
          , userMaybeSpecifyPath, programPath, lookupProgram, addKnownProgram
          , ghcProgram, ghcPkgProgram, hsc2hsProgram
          , arProgram, ranlibProgram, ldProgram
-         , gccProgram, stripProgram )
+         , gccProgram, stripProgram, touchProgram, ibtoolProgram )
 import qualified Distribution.Simple.Program.HcPkg as HcPkg
 import qualified Distribution.Simple.Program.Ar    as Ar
 import qualified Distribution.Simple.Program.Ld    as Ld
@@ -128,10 +126,12 @@ import Data.Monoid              ( Monoid(..) )
 import System.Directory
          ( removeFile, getDirectoryContents, doesFileExist
          , getTemporaryDirectory )
-import System.FilePath          ( (</>), (<.>), takeExtension,
+import System.FilePath          ( (<.>), takeExtension,
                                   takeDirectory, replaceExtension, splitExtension )
 import System.IO (hClose, hPutStrLn)
 import Distribution.Compat.Exception (catchExit, catchIO)
+import Distribution.Compat.Filesystem
+         ( (</>), removeDirectoryRecursiveSilently )
 
 -- -----------------------------------------------------------------------------
 -- Configuring
@@ -522,37 +522,6 @@ getInstalledPackages' verbosity packagedbs conf
     Just ghcProg    = lookupProgram ghcProgram conf
     Just ghcVersion = programVersion ghcProg
 
-getInstalledPackages' verbosity packagedbs conf = do
-    str <- rawSystemProgramStdoutConf verbosity ghcPkgProgram conf ["list"]
-    let pkgFiles = [ init line | line <- lines str, last line == ':' ]
-        dbFile packagedb = case (packagedb, pkgFiles) of
-          (GlobalPackageDB, global:_)      -> return $ Just global
-          (UserPackageDB,  _global:user:_) -> return $ Just user
-          (UserPackageDB,  _global:_)      -> return $ Nothing
-          (SpecificPackageDB specific, _)  -> return $ Just specific
-          _ -> die "cannot read ghc-pkg package listing"
-    pkgFiles' <- mapM dbFile packagedbs
-    sequence [ withFileContents file $ \content -> do
-                  pkgs <- readPackages file content
-                  return (db, pkgs)
-             | (db , Just file) <- zip packagedbs pkgFiles' ]
-  where
-    -- Depending on the version of ghc we use a different type's Read
-    -- instance to parse the package file and then convert.
-    -- It's a bit yuck. But that's what we get for using Read/Show.
-    readPackages
-      | ghcVersion >= Version [6,4,2] []
-      = \file content -> case reads content of
-          [(pkgs, _)] -> return (map IPI642.toCurrent pkgs)
-          _           -> failToRead file
-      | otherwise
-      = \file content -> case reads content of
-          [(pkgs, _)] -> return (map IPI641.toCurrent pkgs)
-          _           -> failToRead file
-    Just ghcProg = lookupProgram ghcProgram conf
-    Just ghcVersion = programVersion ghcProg
-    failToRead file = die $ "cannot read ghc package database " ++ file
-
 substTopDir :: FilePath -> InstalledPackageInfo -> InstalledPackageInfo
 substTopDir topDir ipo
  = ipo {
@@ -833,6 +802,138 @@ buildExe verbosity _pkg_descr lbi
              | filename <- foundCSources]
 
   runGhcProg (binArgs True (withDynExe lbi) (withProfExe lbi))
+
+buildApp :: Verbosity -> PackageDescription -> LocalBuildInfo
+                      -> App                -> ComponentLocalBuildInfo -> IO ()
+buildApp verbosity _pkg_descr lbi app clbi = do
+  appBi <- hackThreadedFlag verbosity
+             (compiler lbi) (withProfExe lbi) (appBuildInfo app)
+
+  let prefix = buildDir lbi
+      appPath = prefix </> (appName app ++ ".app")
+      contentsPath = appPath </> "Contents"
+      executableDirectoryPath = contentsPath </> "MacOS"
+      resourcesPath = contentsPath </> "Resources"
+      tmpDir    = prefix </> (appName app ++ "-tmp")
+  createDirectoryIfMissingVerbose verbosity True executableDirectoryPath
+  createDirectoryIfMissingVerbose verbosity True tmpDir
+
+  let runGhcProg = rawSystemProgramConf verbosity ghcProgram (withPrograms lbi)
+
+  srcMainFile <- findFile (tmpDir : hsSourceDirs appBi) (appModulePath app)
+  let foreignMain =
+        elem (drop 1 $ takeExtension $ appModulePath app) cSourceExtensions
+  hsRootFiles <- do
+    if not foreignMain
+      then return [srcMainFile]
+      else do
+        maybeFiles <-
+          sequence [ findFileWithExtension ["hs", "lhs"]
+                                           (tmpDir : hsSourceDirs appBi)
+                                           (ModuleName.toFilePath x)
+                   | x <- otherModules appBi ]
+        return $ catMaybes maybeFiles
+  foundCSources <- mapM (findFile $ cSourceDirs appBi) $ cSources appBi
+  let cObjs = map (`replaceExtension` objExtension) foundCSources
+  let binArgs linkExe dynExe profExe =
+             "--make"
+          :  (if linkExe
+                 then ["-o", executableDirectoryPath </> appName app]
+                 else ["-c"])
+          ++ constructGHCCmdLine lbi appBi clbi tmpDir verbosity
+          ++ (if linkExe
+                 then [tmpDir </> x | x <- cObjs]
+                 else [])
+          ++ hsRootFiles
+          ++ (if foreignMain
+                 then (if linkExe
+                          then [srcMainFile]
+                          else [])
+                      ++ ["-no-hs-main"]
+                 else [])
+          ++ ["-optl" ++ opt | opt <- PD.ldOptions appBi]
+          ++ ["-l"++lib | lib <- extraLibs appBi]
+          ++ ["-L"++libDir | libDir <- extraLibDirs appBi]
+          ++ concat [["-framework", f] | f <- PD.frameworks appBi]
+          ++ (let flagPrefix = if linkExe
+                                then "-optl"
+                                else "-optc"
+              in case PD.objcGCMode appBi of
+                   PD.ObjcGCDisabled -> []
+                   PD.ObjcGCOptional -> [flagPrefix ++ "-fobjc-gc"]
+                   PD.ObjcGCMandatory -> [flagPrefix ++ "-fobjc-gc-only"])
+          ++ (if dynExe
+                 then ["-dynamic"]
+                 else [])
+          ++ (if profExe
+                 then ["-prof",
+                       "-hisuf", "p_hi",
+                       "-osuf", "p_o"
+                      ] ++ ghcProfOptions appBi
+                 else [])
+
+  -- For building exe's for profiling that use TH we actually
+  -- have to build twice, once without profiling and the again
+  -- with profiling. This is because the code that TH needs to
+  -- run at compile time needs to be the vanilla ABI so it can
+  -- be loaded up and run by the compiler.
+  when (withProfExe lbi && EnableExtension TemplateHaskell `elem` allExtensions appBi)
+     (runGhcProg (binArgs False (withDynExe lbi) False))
+
+  runGhcProg (binArgs False (withDynExe lbi) (withProfExe lbi))
+
+  unless (null (cSources appBi)) $ do
+   info verbosity "Building C Sources."
+   sequence_ [do let (odir,args) = constructCcCmdLine lbi appBi clbi
+                                          tmpDir filename verbosity
+                                          (withDynExe lbi) (withProfExe lbi)
+                 createDirectoryIfMissingVerbose verbosity True odir
+                 runGhcProg args
+             | filename <- foundCSources]
+
+  runGhcProg (binArgs True (withDynExe lbi) (withProfExe lbi))
+  
+  (touchConfiguredProgram, _) <-
+    requireProgram verbosity touchProgram $ withPrograms lbi
+  (ibtoolConfiguredProgram, _) <-
+    requireProgram verbosity ibtoolProgram $ withPrograms lbi
+  
+  info verbosity $ "Building " ++ appName app ++ ".app bundle..."
+  
+  removeDirectoryRecursiveSilently appPath
+  
+  createDirectoryIfMissingVerbose verbosity False appPath
+  writeFileAtomic (appPath </> "PkgInfo") "APPL????"
+  
+  createDirectoryIfMissingVerbose verbosity False contentsPath
+  let infoPlistSource = appInfoPlist app
+      infoPlistDestination = contentsPath </> "Info.plist"
+  installOrdinaryFile verbosity infoPlistSource infoPlistDestination
+  
+  createDirectoryIfMissingVerbose verbosity False resourcesPath
+  let sourceResourcePath relativePath =
+        case appResourceDirectory app of
+          Nothing -> relativePath
+          Just resourceDirectory -> resourceDirectory </> relativePath
+  mapM_ (\xib -> do
+           let xibPath = sourceResourcePath xib
+               nibPath = resourcesPath </> replaceExtension xib ".nib"
+           runProgram verbosity
+                      ibtoolConfiguredProgram
+                      ["--warnings",
+                       "--errors",
+                       "--output-format=human-readable-text",
+                       "--compile",
+                       nibPath,
+                       xibPath])
+        $ appXIBs app
+  mapM_ (\resource -> do
+           let resourceSource = sourceResourcePath resource
+               resourceDestination = resourcesPath </> resource
+           installOrdinaryFile verbosity resourceSource resourceDestination)
+        $ appOtherResources app
+  
+  runProgram verbosity touchConfiguredProgram [appPath]
 
 -- | Filter the "-threaded" flag when profiling as it does not
 --   work with ghc-6.8 and older.

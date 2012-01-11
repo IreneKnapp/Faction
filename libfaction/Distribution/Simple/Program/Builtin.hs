@@ -18,14 +18,6 @@ module Distribution.Simple.Program.Builtin (
     -- * Programs that Cabal knows about
     ghcProgram,
     ghcPkgProgram,
-    lhcProgram,
-    lhcPkgProgram,
-    nhcProgram,
-    hmakeProgram,
-    jhcProgram,
-    hugsProgram,
-    ffihugsProgram,
-    uhcProgram,
     gccProgram,
     ranlibProgram,
     arProgram,
@@ -43,6 +35,8 @@ module Distribution.Simple.Program.Builtin (
     cppProgram,
     pkgConfigProgram,
     hpcProgram,
+    touchProgram,
+    ibtoolProgram
   ) where
 
 import Distribution.Simple.Program.Types
@@ -62,14 +56,6 @@ builtinPrograms =
     -- compilers and related progs
       ghcProgram
     , ghcPkgProgram
-    , hugsProgram
-    , ffihugsProgram
-    , nhcProgram
-    , hmakeProgram
-    , jhcProgram
-    , lhcProgram
-    , lhcPkgProgram
-    , uhcProgram
     , hpcProgram
     -- preprocessors
     , hscolourProgram
@@ -87,6 +73,8 @@ builtinPrograms =
     , stripProgram
     , ldProgram
     , tarProgram
+    , touchProgram
+    , ibtoolProgram
     -- configuration tools
     , pkgConfigProgram
     ]
@@ -106,57 +94,6 @@ ghcPkgProgram = (simpleProgram "ghc-pkg") {
         _               -> ""
   }
 
-lhcProgram :: Program
-lhcProgram = (simpleProgram "lhc") {
-    programFindVersion = findProgramVersion "--numeric-version" id
-  }
-
-lhcPkgProgram :: Program
-lhcPkgProgram = (simpleProgram "lhc-pkg") {
-    programFindVersion = findProgramVersion "--version" $ \str ->
-      -- Invoking "lhc-pkg --version" gives a string like
-      -- "LHC package manager version 0.7"
-      case words str of
-        (_:_:_:_:ver:_) -> ver
-        _               -> ""
-  }
-
-nhcProgram :: Program
-nhcProgram = (simpleProgram "nhc98") {
-    programFindVersion = findProgramVersion "--version" $ \str ->
-      -- Invoking "nhc98 --version" gives a string like
-      -- "/usr/local/bin/nhc98: v1.20 (2007-11-22)"
-      case words str of
-        (_:('v':ver):_) -> ver
-        _               -> ""
-  }
-
-hmakeProgram :: Program
-hmakeProgram = (simpleProgram "hmake") {
-    programFindVersion = findProgramVersion "--version" $ \str ->
-    -- Invoking "hmake --version" gives a string line
-    -- "/usr/local/bin/hmake: 3.13 (2006-11-01)"
-      case words str of
-        (_:ver:_) -> ver
-        _         -> ""
-  }
-
-jhcProgram :: Program
-jhcProgram = (simpleProgram "jhc") {
-    programFindVersion = findProgramVersion "--version" $ \str ->
-    -- invoking "jhc --version" gives a string like
-    -- "jhc 0.3.20080208 (wubgipkamcep-2)
-    -- compiled by ghc-6.8 on a x86_64 running linux"
-      case words str of
-        (_:ver:_) -> ver
-        _         -> ""
-  }
-
-uhcProgram :: Program
-uhcProgram = (simpleProgram "uhc") {
-    programFindVersion = findProgramVersion "--version-dotted" id
-  }
-
 hpcProgram :: Program
 hpcProgram = (simpleProgram "hpc")
     {
@@ -165,13 +102,6 @@ hpcProgram = (simpleProgram "hpc")
                 (_ : _ : _ : ver : _) -> ver
                 _ -> ""
     }
-
--- AArgh! Finding the version of hugs or ffihugs is almost impossible.
-hugsProgram :: Program
-hugsProgram = simpleProgram "hugs"
-
-ffihugsProgram :: Program
-ffihugsProgram = simpleProgram "ffihugs"
 
 happyProgram :: Program
 happyProgram = (simpleProgram "happy") {
@@ -267,3 +197,9 @@ pkgConfigProgram :: Program
 pkgConfigProgram = (simpleProgram "pkg-config") {
     programFindVersion = findProgramVersion "--version" id
   }
+
+touchProgram :: Program
+touchProgram = simpleProgram "touch"
+
+ibtoolProgram :: Program
+ibtoolProgram = simpleProgram "ibtool"

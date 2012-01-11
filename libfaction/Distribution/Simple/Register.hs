@@ -74,7 +74,7 @@ import Distribution.Simple.Compiler
          , PackageDBStack, registrationPackageDB )
 import Distribution.Simple.Program
          ( ConfiguredProgram, runProgramInvocation
-         , requireProgram, lookupProgram, ghcPkgProgram, lhcPkgProgram )
+         , requireProgram, lookupProgram, ghcPkgProgram )
 import Distribution.Simple.Program.Script
          ( invocationAsSystemScript )
 import qualified Distribution.Simple.Program.HcPkg as HcPkg
@@ -156,12 +156,6 @@ register pkg@PackageDescription { library       = Just lib  }
       case compilerFlavor (compiler lbi) of
         GHC  -> do (ghcPkg, _) <- requireProgram verbosity ghcPkgProgram (withPrograms lbi)
                    writeHcPkgRegisterScript verbosity installedPkgInfo ghcPkg packageDbs
-        LHC  -> do (lhcPkg, _) <- requireProgram verbosity lhcPkgProgram (withPrograms lbi)
-                   writeHcPkgRegisterScript verbosity installedPkgInfo lhcPkg packageDbs
-        Hugs -> notice verbosity "Registration scripts not needed for hugs"
-        JHC  -> notice verbosity "Registration scripts not needed for jhc"
-        NHC  -> notice verbosity "Registration scripts not needed for nhc98"
-        UHC  -> notice verbosity "Registration scripts not needed for uhc"
         _    -> die "Registration scripts are not implemented for this compiler"
 
 register _ _ regFlags = notice verbosity "No package to register"
@@ -278,7 +272,6 @@ generalInstalledPackageInfo adjustRelIncDirs pkg lib clbi installDirs =
     IPI.includeDirs        = absinc ++ adjustRelIncDirs relinc,
     IPI.includes           = includes bi,
     IPI.depends            = map fst (componentPackageDeps clbi),
-    IPI.hugsOptions        = hcOptions Hugs bi,
     IPI.ccOptions          = [], -- Note. NOT ccOptions bi!
                                  -- We don't want cc-options to be propagated
                                  -- to C compilations in other packages.
@@ -367,12 +360,6 @@ unregister pkg lbi regFlags = do
            then writeFileAtomic unregScriptFileName
                   (invocationAsSystemScript buildOS invocation)
             else runProgramInvocation verbosity invocation
-    Hugs -> do
-        _ <- tryIO $ removeDirectoryRecursive (libdir installDirs)
-        return ()
-    NHC -> do
-        _ <- tryIO $ removeDirectoryRecursive (libdir installDirs)
-        return ()
     _ ->
         die ("only unregistering with GHC and Hugs is implemented")
 

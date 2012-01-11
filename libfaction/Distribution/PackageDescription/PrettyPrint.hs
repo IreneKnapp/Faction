@@ -71,7 +71,7 @@ indentWith = 4
 simplifiedPrinting :: Bool
 simplifiedPrinting = False
 
--- | Writes a .cabal file from a generic package description
+-- | Writes a .faction file from a generic package description
 writeGenericPackageDescription :: FilePath -> GenericPackageDescription -> IO ()
 writeGenericPackageDescription fpath pkg = writeUTF8File fpath (showGenericPackageDescription pkg)
 
@@ -85,6 +85,7 @@ ppGenericPackageDescription gpd          =
         $+$ ppGenPackageFlags (genPackageFlags gpd)
         $+$ ppLibrary (condLibrary gpd)
         $+$ ppExecutables (condExecutables gpd)
+        $+$ ppApps (condApps gpd)
         $+$ ppTestSuites (condTestSuites gpd)
 
 ppPackageDescription :: PackageDescription -> Doc
@@ -161,6 +162,63 @@ ppExecutables exes                       =
                 then empty else text "main-is:" <+> text modulePath')
             $+$ ppDiffFields binfoFieldDescrs buildInfo' buildInfo2
             $+$ ppCustomFields (customFieldsBI buildInfo')
+
+ppApps :: [(String, CondTree ConfVar [Dependency] App)] -> Doc
+ppApps exes                       =
+    vcat [emptyLine $ text ("app " ++ n)
+              $+$ nest indentWith (ppCondTree condTree Nothing ppApp)| (n,condTree) <- apps]
+  where IAK
+    ppApp app Nothing =
+        (if appModulePath app == ""
+           then empty
+           else text "main-is:" <+> (text $ appModulePath app))
+        $+$
+        (if appInfoPlist app == ""
+           then empty
+           else text "info-plist:" <+> (text $ appInfoPlist app))
+        $+$
+        (if appResourceDirectory app == Nothing
+           then empty
+           else text "resource-directory:"
+                <+> (text $ appResourceDirectory app))
+        $+$
+        (if appXIBs app == []
+           then empty
+           else text "xibs:" <+> (text $ appXIBs app))
+        $+$
+        (if appOtherResources app == []
+           then empty
+           else text "other-resources:" <+> (text $ appOtherResources app))
+        $+$ (ppFields binfoFieldDescrs $ appBuildInfo app)
+        $+$ (ppCustomFields $ customFieldsBI $ appBuildInfo app)
+    ppExe app (Just app2) =
+        (if appModulePath app == ""
+            || appModulePath app == appModulePath app2
+           then empty
+           else text "main-is:" <+> (text $ appModulePath app))
+        $+$
+        (if appInfoPlist app == ""
+            || appInfoPlist app == appInfoPlist app2
+           then empty
+           else text "info-plist:" <+> (text $ appInfoPlist app))
+        $+$
+        (if appResourceDirectory app == Nothing
+            || appResourceDirectory app == appResourceDirectory app2
+           then empty
+           else text "resource-directory:"
+                <+> (text $ appResourceDirectory app))
+        $+$
+        (if appXIBs app == []
+            || appXIBs app == appXIBs app2
+           then empty
+           else text "xibs:" <+> (text $ appXIBs app))
+        $+$
+        (if appOtherResources app == []
+            || appOtherResources app == appOtherResources app2
+           then empty
+           else text "other-resources:" <+> (text $ appOtherResources app))
+        $+$ ppDiffFields binfoFieldDescrs (appBuildInfo app) (appBuildInfo app2)
+        $+$ ppCustomFields (customFieldsBI $ appBuildInfo app)
 
 ppTestSuites :: [(String, CondTree ConfVar [Dependency] TestSuite)] -> Doc
 ppTestSuites suites =

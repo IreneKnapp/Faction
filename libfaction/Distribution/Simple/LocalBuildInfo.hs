@@ -1,48 +1,12 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.Simple.LocalBuildInfo
--- Copyright   :  Isaac Jones 2003-2004
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
--- Once a package has been configured we have resolved conditionals and
--- dependencies, configured the compiler and other needed external programs.
--- The 'LocalBuildInfo' is used to hold all this information. It holds the
--- install dirs, the compiler, the exact package dependencies, the configured
--- programs, the package database to use and a bunch of miscellaneous configure
--- flags. It gets saved and reloaded from a file (@dist\/setup-config@). It gets
--- passed in to very many subsequent build actions.
-
-{- All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Isaac Jones nor the names of other
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
+{-
+Once a package has been configured we have resolved conditionals and
+dependencies, configured the compiler and other needed external programs.
+The 'LocalBuildInfo' is used to hold all this information. It holds the
+install dirs, the compiler, the exact package dependencies, the configured
+programs, the package database to use and a bunch of miscellaneous configure
+flags. It gets saved and reloaded from a file (@dist\/setup-config@). It gets
+passed in to very many subsequent build actions.
+-}
 
 module Distribution.Simple.LocalBuildInfo (
         LocalBuildInfo(..),
@@ -74,8 +38,8 @@ import qualified Distribution.Simple.InstallDirs as InstallDirs
 import Distribution.Simple.Program (ProgramConfiguration)
 import Distribution.PackageDescription
          ( PackageDescription(..), withLib, Library(libBuildInfo), withExe
-         , Executable(exeName, buildInfo), withTest, TestSuite(..)
-         , BuildInfo(buildable), Benchmark(..) )
+         , Executable(exeName, buildInfo), withApp, App(appName, appBuildInfo)
+         , withTest, TestSuite(..), BuildInfo(buildable), Benchmark(..) )
 import Distribution.Package
          ( PackageId, Package(..), InstalledPackageId(..) )
 import Distribution.Simple.Compiler
@@ -96,10 +60,10 @@ import Data.List (nub, find)
 data LocalBuildInfo = LocalBuildInfo {
         configFlags   :: ConfigFlags,
         -- ^ Options passed to the configuration step.
-        -- Needed to re-run configuration when .cabal is out of date
+        -- Needed to re-run configuration when .faction is out of date
         extraConfigArgs     :: [String],
         -- ^ Extra args on the command line for the configuration step.
-        -- Needed to re-run configuration when .cabal is out of date
+        -- Needed to re-run configuration when .faction is out of date
         installDirTemplates :: InstallDirTemplates,
                 -- ^ The installation directories for the various differnt
                 -- kinds of files
@@ -108,11 +72,9 @@ data LocalBuildInfo = LocalBuildInfo {
                 -- ^ The compiler we're building with
         buildDir      :: FilePath,
                 -- ^ Where to build the package.
-        --TODO: eliminate hugs's scratchDir, use builddir
-        scratchDir    :: FilePath,
-                -- ^ Where to put the result of the Hugs build.
         libraryConfig       :: Maybe ComponentLocalBuildInfo,
         executableConfigs   :: [(String, ComponentLocalBuildInfo)],
+        appConfigs          :: [(String, ComponentLocalBuildInfo)],
         compBuildOrder :: [ComponentName],
                 -- ^ All the components to build, ordered by topological sort
                 -- over the intrapackage dependency graph
@@ -166,12 +128,14 @@ inplacePackageId pkgid = InstalledPackageId (display pkgid ++ "-inplace")
 
 data Component = CLib   Library
                | CExe   Executable
+               | CApp   App
                | CTest  TestSuite
                | CBench Benchmark
                deriving (Show, Eq, Read)
 
 data ComponentName = CLibName   -- currently only a single lib
                    | CExeName   String
+                   | CAppName   String
                    | CTestName  String
                    | CBenchName String
                    deriving (Show, Eq, Read)
@@ -187,14 +151,16 @@ data ComponentLocalBuildInfo = ComponentLocalBuildInfo {
 
 foldComponent :: (Library -> a)
               -> (Executable -> a)
+              -> (App -> a)
               -> (TestSuite -> a)
               -> (Benchmark -> a)
               -> Component
               -> a
-foldComponent f _ _ _ (CLib   lib) = f lib
-foldComponent _ f _ _ (CExe   exe) = f exe
-foldComponent _ _ f _ (CTest  tst) = f tst
-foldComponent _ _ _ f (CBench bch) = f bch
+foldComponent f _ _ _ _ (CLib   lib) = f lib
+foldComponent _ f _ _ _ (CExe   exe) = f exe
+foldComponent _ _ f _ _ (CApp   app) = f app
+foldComponent _ _ _ f _ (CTest  tst) = f tst
+foldComponent _ _ _ _ f (CBench bch) = f bch
 
 -- | Obtains all components (libs, exes, or test suites), transformed by the
 -- given function.  Useful for gathering dependencies with component context.
@@ -206,6 +172,8 @@ allComponentsBy pkg_descr f =
                     , buildable (libBuildInfo lib) ]
  ++ [ f (CExe  exe) | exe <- executables pkg_descr
                     , buildable (buildInfo exe) ]
+ ++ [ f (CApp  app) | app <- apps pkg_descr
+                    , buildable (appBuildInfo app) ]
  ++ [ f (CTest tst) | tst <- testSuites pkg_descr
                     , buildable (testBuildInfo tst)
                     , testEnabled tst ]
@@ -232,6 +200,13 @@ withExeLBI pkg_descr lbi f = withExe pkg_descr $ \exe ->
   case lookup (exeName exe) (executableConfigs lbi) of
     Just clbi -> f exe clbi
     Nothing   -> die (missingExeConf (exeName exe))
+
+withAppLBI :: PackageDescription -> LocalBuildInfo
+           -> (App -> ComponentLocalBuildInfo -> IO ()) -> IO ()
+withAppLBI pkg_descr lbi f = withApp pkg_descr $ \app ->
+  case lookup (appName app) (appConfigs lbi) of
+    Just clbi -> f app clbi
+    Nothing   -> die (missingAppConf (appName app))
 
 withTestLBI :: PackageDescription -> LocalBuildInfo
             -> (TestSuite -> ComponentLocalBuildInfo -> IO ()) -> IO ()
@@ -289,11 +264,14 @@ withComponentsLBI pkg_descr lbi f = mapM_ compF (compBuildOrder lbi)
                        ++ name ++ " but the package contains no such benchmark."
 
 missingLibConf :: String
-missingExeConf, missingTestConf, missingBenchConf :: String -> String
+missingExeConf, missingAppConf, missingTestConf, missingBenchConf
+  :: String -> String
 
 missingLibConf       = "internal error: the package contains a library "
                     ++ "but there is no corresponding configuration data"
 missingExeConf  name = "internal error: the package contains an executable "
+                    ++ name ++ " but there is no corresponding configuration data"
+missingAppConf  name = "internal error: the package contains an app "
                     ++ name ++ " but there is no corresponding configuration data"
 missingTestConf name = "internal error: the package contains a test suite "
                     ++ name ++ " but there is no corresponding configuration data"

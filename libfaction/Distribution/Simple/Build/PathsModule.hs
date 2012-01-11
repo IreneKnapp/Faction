@@ -49,7 +49,7 @@ import Data.Maybe
 generate :: PackageDescription -> LocalBuildInfo -> String
 generate pkg_descr lbi =
    let pragmas
-        | absolute || isHugs = ""
+        | absolute = ""
         | supports_language_pragma =
           "{-# LANGUAGE ForeignFunctionInterface #-}\n"
         | otherwise =
@@ -58,7 +58,6 @@ generate pkg_descr lbi =
 
        foreign_imports
         | absolute = ""
-        | isHugs = "import System.Environment\n"
         | otherwise =
           "import Foreign\n"++
           "import Foreign.C\n"
@@ -151,10 +150,8 @@ generate pkg_descr lbi =
         absolute =
              hasLibs pkg_descr        -- we can only make progs relocatable
           || isNothing flat_bindirrel -- if the bin dir is an absolute path
-          || (isHugs && isNothing flat_progdirrel)
           || not (supportsRelocatableProgs (compilerFlavor (compiler lbi)))
 
-        supportsRelocatableProgs Hugs = True
         supportsRelocatableProgs GHC  = case buildOS of
                            Windows   -> True
                            _         -> False
@@ -162,11 +159,7 @@ generate pkg_descr lbi =
 
         paths_modulename = autogenModuleName pkg_descr
 
-        isHugs = compilerFlavor (compiler lbi) == Hugs
         get_prefix_stuff
-          | isHugs    = "progdirrel :: String\n"++
-                        "progdirrel = "++show (fromJust flat_progdirrel)++"\n\n"++
-                        get_prefix_hugs
           | otherwise = get_prefix_win32
 
         path_sep = show [pathSeparator]

@@ -73,16 +73,14 @@ import Text.PrettyPrint ((<>))
 import qualified Data.Char as Char (toLower, isDigit, isAlphaNum)
 import Control.Monad (when)
 
-data CompilerFlavor = GHC | NHC | YHC | Hugs | HBC | Helium | JHC | LHC | UHC
-                    | OtherCompiler String
+data CompilerFlavor = GHC | OtherCompiler String
   deriving (Show, Read, Eq, Ord)
 
 knownCompilerFlavors :: [CompilerFlavor]
-knownCompilerFlavors = [GHC, NHC, YHC, Hugs, HBC, Helium, JHC, LHC, UHC]
+knownCompilerFlavors = [GHC]
 
 instance Text CompilerFlavor where
   disp (OtherCompiler name) = Disp.text name
-  disp NHC                  = Disp.text "nhc98"
   disp other                = Disp.text (lowercase (show other))
 
   parse = do
@@ -121,8 +119,7 @@ parseCompilerFlavorCompat = do
     Nothing       -> return (OtherCompiler comp)
   where
     compilerMap = [ (show compiler, compiler)
-                  | compiler <- knownCompilerFlavors
-                  , compiler /= YHC ]
+                  | compiler <- knownCompilerFlavors ]
 
 buildCompilerFlavor :: CompilerFlavor
 buildCompilerFlavor = classifyCompilerFlavor System.Info.compilerName

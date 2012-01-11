@@ -34,7 +34,14 @@ module Distribution.PackageDescription (
         withExe,
         hasExes,
         exeModules,
-
+        
+        -- ** Apps
+        App(..),
+        emptyApp,
+        withApp,
+        hasApps,
+        appModules,
+        
         -- * Tests
         TestSuite(..),
         TestSuiteInterface(..),
@@ -146,6 +153,7 @@ data PackageDescription
         -- components
         library        :: Maybe Library,
         executables    :: [Executable],
+        apps           :: [App],
         testSuites     :: [TestSuite],
         benchmarks     :: [Benchmark],
         dataFiles      :: [FilePath],
@@ -183,6 +191,7 @@ emptyPackageDescription
                       customFieldsPD = [],
                       library      = Nothing,
                       executables  = [],
+                      apps         = [],
                       testSuites   = [],
                       benchmarks   = [],
                       dataFiles    = [],
@@ -315,6 +324,64 @@ withExe pkg_descr f =
 -- | Get all the module names from an exe
 exeModules :: Executable -> [ModuleName]
 exeModules exe = otherModules (buildInfo exe)
+
+-- ---------------------------------------------------------------------------
+-- The App type
+
+data App = App {
+        appName    :: String,
+        appModulePath :: FilePath,
+        appInfoPlist :: FilePath,
+        appResourceDirectory :: Maybe FilePath,
+        appXIBs :: [FilePath],
+        appOtherResources :: [FilePath],
+        appBuildInfo  :: BuildInfo
+    }
+    deriving (Show, Read, Eq)
+
+instance Monoid App where
+  mempty = App {
+    appName    = mempty,
+    appModulePath = mempty,
+    appInfoPlist = mempty,
+    appResourceDirectory = mempty,
+    appXIBs = mempty,
+    appOtherResources = mempty,
+    appBuildInfo  = mempty
+  }
+  mappend a b = App {
+    appName    = combine' appName,
+    appModulePath = combine appModulePath,
+    appInfoPlist = combine appInfoPlist,
+    appResourceDirectory = combine appResourceDirectory,
+    appXIBs = combine appXIBs,
+    appOtherResources = combine appOtherResources,
+    appBuildInfo  = combine appBuildInfo
+  }
+    where combine field = field a `mappend` field b
+          combine' field = case (field a, field b) of
+                      ("","") -> ""
+                      ("", x) -> x
+                      (x, "") -> x
+                      (x, y) -> error $ "Ambiguous values for executable field: '"
+                                  ++ x ++ "' and '" ++ y ++ "'"
+
+emptyApp :: App
+emptyApp = mempty
+
+-- |does this package have any apps?
+hasApps :: PackageDescription -> Bool
+hasApps p = any (buildable . appBuildInfo) (apps p)
+
+-- | Perform the action on each buildable 'App' in the package
+-- description.
+withApp :: PackageDescription -> (App -> IO ()) -> IO ()
+withApp pkg_descr f =
+  sequence_ [f app | app <- apps pkg_descr, buildable (appBuildInfo app)]
+
+-- | Get all the module names from an app
+appModules :: App -> [ModuleName]
+appModules app = otherModules (appBuildInfo app)
 
 -- ---------------------------------------------------------------------------
 -- The TestSuite type
@@ -680,6 +747,9 @@ allBuildInfo pkg_descr = [ bi | Just lib <- [library pkg_descr]
                       ++ [ bi | exe <- executables pkg_descr
                               , let bi = buildInfo exe
                               , buildable bi ]
+                      ++ [ bi | app <- apps pkg_descr
+                              , let bi = appBuildInfo app
+                              , buildable bi ]
                       ++ [ bi | tst <- testSuites pkg_descr
                               , let bi = testBuildInfo tst
                               , buildable bi
@@ -880,6 +950,7 @@ data GenericPackageDescription =
         genPackageFlags       :: [Flag],
         condLibrary        :: Maybe (CondTree ConfVar [Dependency] Library),
         condExecutables    :: [(String, CondTree ConfVar [Dependency] Executable)],
+        condApps           :: [(String, CondTree ConfVar [Dependency] App)],
         condTestSuites     :: [(String, CondTree ConfVar [Dependency] TestSuite)],
         condBenchmarks     :: [(String, CondTree ConfVar [Dependency] Benchmark)]
       }

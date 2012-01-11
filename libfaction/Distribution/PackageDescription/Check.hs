@@ -177,8 +177,9 @@ checkSanity pkg =
   ]
   --TODO: check for name clashes case insensitively: windows file systems cannot cope.
 
-  ++ maybe []  checkLibrary    (library pkg)
-  ++ concatMap checkExecutable (executables pkg)
+  ++ maybe []  checkLibrary         (library pkg)
+  ++ concatMap checkExecutable      (executables pkg)
+  ++ concatMap checkApp             (apps pkg)
   ++ concatMap (checkTestSuite pkg) (testSuites pkg)
   ++ concatMap (checkBenchmark pkg) (benchmarks pkg)
 
@@ -230,6 +231,28 @@ checkExecutable exe =
   ]
   where
     moduleDuplicates = dups (exeModules exe)
+
+checkApp :: App -> [PackageCheck]
+checkApp app =
+  catMaybes [
+  
+    check (null (appModulePath app)) $
+      PackageBuildImpossible $
+        "No 'Main-Is' field found for app " ++ appName app
+  
+  , check (not (null (appModulePath app))
+       && (not $pathIsKnownProgrammingLanguage $ appModulePath app)) $
+      PackageBuildImpossible $
+           "The 'main-is' field must specify a file with an extension of a "
+        ++ "known programming language."
+  
+  , check (not (null moduleDuplicates)) $
+       PackageBuildWarning $
+            "Duplicate modules in app '" ++ appName app ++ "': "
+         ++ commaSep (map display moduleDuplicates)
+  ]
+  where
+    moduleDuplicates = dups (appModules app)
 
 checkTestSuite :: PackageDescription -> TestSuite -> [PackageCheck]
 checkTestSuite pkg test =

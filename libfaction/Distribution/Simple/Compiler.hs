@@ -205,9 +205,6 @@ hcDefines :: Compiler -> [String]
 hcDefines comp =
   case compilerFlavor comp of
     GHC  -> ["-D__GLASGOW_HASKELL__=" ++ hcVersionInt version]
-    JHC  -> ["-D__JHC__=" ++ hcVersionInt version]
-    NHC  -> ["-D__NHC__=" ++ hcVersionInt version]
-    Hugs -> ["-D__HUGS__"]
     _    -> []
   where version = compilerVersion comp
 

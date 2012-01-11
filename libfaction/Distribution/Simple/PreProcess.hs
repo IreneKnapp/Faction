@@ -222,7 +222,6 @@ preprocessComponent pd comp lbi isSrcDist verbosity handlers = case comp of
                                  ++ "type " ++ display tt
   where
     builtinHaskellSuffixes
-      | NHC == compilerFlavor (compiler lbi) = ["hs", "lhs", "gc"]
       | otherwise                            = ["hs", "lhs"]
     builtinCSuffixes = cSourceExtensions
     builtinSuffixes = builtinHaskellSuffixes ++ builtinCSuffixes

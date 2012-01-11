@@ -1,49 +1,9 @@
------------------------------------------------------------------------------
--- |
--- Module      :  Distribution.Simple.Build
--- Copyright   :  Isaac Jones 2003-2005,
---                Ross Paterson 2006,
---                Duncan Coutts 2007-2008
---
--- Maintainer  :  cabal-devel@haskell.org
--- Portability :  portable
---
--- This is the entry point to actually building the modules in a package. It
--- doesn't actually do much itself, most of the work is delegated to
--- compiler-specific actions. It does do some non-compiler specific bits like
--- running pre-processors.
---
-
-{- Copyright (c) 2003-2005, Isaac Jones
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of Isaac Jones nor the names of other
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. -}
+{-
+This is the entry point to actually building the modules in a package. It
+doesn't actually do much itself, most of the work is delegated to
+compiler-specific actions. It does do some non-compiler specific bits like
+running pre-processors.
+-}
 
 module Distribution.Simple.Build (
     build,
@@ -64,7 +24,7 @@ import Distribution.Simple.Compiler
          ( CompilerFlavor(..), compilerFlavor, PackageDB(..) )
 import Distribution.PackageDescription
          ( PackageDescription(..), BuildInfo(..), Library(..), Executable(..)
-         , TestSuite(..), TestSuiteInterface(..), Benchmark(..)
+         , App(..), TestSuite(..), TestSuiteInterface(..), Benchmark(..)
          , BenchmarkInterface(..) )
 import qualified Distribution.InstalledPackageInfo as IPI
 import qualified Distribution.ModuleName as ModuleName
@@ -105,7 +65,7 @@ import System.Directory
          ( getCurrentDirectory )
 
 -- -----------------------------------------------------------------------------
--- |Build the libraries and executables in this package.
+-- |Build the libraries, executables, and apps in this package.
 
 build    :: PackageDescription  -- ^ Mostly information from the .cabal file
          -> LocalBuildInfo      -- ^ Configuration information
@@ -154,6 +114,17 @@ build pkg_descr lbi flags suffixes = do
         pre comp lbi'
         info verbosity $ "Building executable " ++ exeName exe ++ "..."
         buildExe verbosity pkg_descr lbi' exe clbi
+
+      CApp app -> do
+        let bi     = appBuildInfo app
+            progs' = addInternalBuildTools pkg_descr lbi bi (withPrograms lbi)
+            lbi'   = lbi {
+                       withPrograms  = progs',
+                       withPackageDB = withPackageDB lbi ++ [internalPackageDB]
+                     }
+        pre comp lbi'
+        info verbosity $ "Building app " ++ appName app ++ "..."
+        buildApp verbosity pkg_descr lbi' app clbi
 
       CTest test -> do
         case testInterface test of
@@ -288,8 +259,15 @@ buildExe verbosity pkg_descr lbi exe clbi =
     GHC  -> GHC.buildExe  verbosity pkg_descr lbi exe clbi
     _    -> die "Building is not supported with this compiler."
 
+buildApp :: Verbosity -> PackageDescription -> LocalBuildInfo
+                      -> App                -> ComponentLocalBuildInfo -> IO ()
+buildApp verbosity pkg_descr lbi app clbi =
+  case compilerFlavor (compiler lbi) of
+    GHC  -> GHC.buildApp  verbosity pkg_descr lbi app clbi
+    _    -> die "Building is not supported with this compiler."
+
 initialBuildSteps :: FilePath -- ^"dist" prefix
-                  -> PackageDescription  -- ^mostly information from the .cabal file
+                  -> PackageDescription  -- ^mostly information from the .faction file
                   -> LocalBuildInfo -- ^Configuration information
                   -> Verbosity -- ^The verbosity to use
                   -> IO ()

@@ -74,8 +74,8 @@ import qualified Distribution.Simple.PackageIndex as PackageIndex
 import Distribution.Simple.PackageIndex (PackageIndex)
 import Distribution.PackageDescription as PD
     ( PackageDescription(..), specVersion, GenericPackageDescription(..)
-    , Library(..), hasLibs, Executable(..), BuildInfo(..), allExtensions
-    , HookedBuildInfo, updatePackageDescription, allBuildInfo
+    , Library(..), hasLibs, Executable(..), App(..), BuildInfo(..)
+    , allExtensions, HookedBuildInfo, updatePackageDescription, allBuildInfo
     , FlagName(..), TestSuite(..), Benchmark(..) )
 import Distribution.PackageDescription.Configuration
     ( finalizePackageDescription, mapTreeData )
@@ -464,6 +464,7 @@ configure (pkg_descr0, pbi) cfg
         -- versions of the same package.
         let configLib lib = configComponent (libBuildInfo lib)
             configExe exe = (exeName exe, configComponent (buildInfo exe))
+            configApp app = (appName app, configComponent (appBuildInfo app))
             configTest test = (testName test,
                     configComponent(testBuildInfo test))
             configBenchmark bm = (benchmarkName bm,
@@ -489,8 +490,8 @@ configure (pkg_descr0, pbi) cfg
                  mapMaybe exeDepToComp (buildTools bi)
               ++ mapMaybe libDepToComp (targetBuildDepends bi)
               where
-                bi = foldComponent libBuildInfo buildInfo testBuildInfo
-                     benchmarkBuildInfo component
+                bi = foldComponent libBuildInfo buildInfo appBuildInfo
+                     testBuildInfo benchmarkBuildInfo component
                 exeDepToComp (Dependency (PackageName name) _) =
                   CExe `fmap` find ((==) name . exeName)
                                 (executables pkg_descr')
@@ -504,12 +505,13 @@ configure (pkg_descr0, pbi) cfg
                                  $ allComponentsBy pkg_descr'
                                  $ \c -> (c, key c, map key (ipDeps c))
                     key          = foldComponent (const "library") exeName
-                                   testName benchmarkName
+                                   appName testName benchmarkName
 
         -- check for cycles in the dependency graph
         buildOrder <- forM sccs $ \scc -> case scc of
           AcyclicSCC (c,_,_) -> return (foldComponent (const CLibName)
                                                       (CExeName . exeName)
+                                                      (CAppName . appName)
                                                       (CTestName . testName)
                                                       (CBenchName . benchmarkName)
                                                       c)
@@ -526,11 +528,9 @@ configure (pkg_descr0, pbi) cfg
                     installDirTemplates = installDirs,
                     compiler            = comp,
                     buildDir            = buildDir',
-                    scratchDir          = fromFlagOrDefault
-                                            (distPref </> "scratch")
-                                            (configScratchDir cfg),
                     libraryConfig       = configLib `fmap` library pkg_descr',
                     executableConfigs   = configExe `fmap` executables pkg_descr',
+                    appConfigs          = configApp `fmap` apps pkg_descr',
                     testSuiteConfigs    = configTest `fmap` testSuites pkg_descr',
                     benchmarkConfigs    = configBenchmark `fmap` benchmarks pkg_descr',
                     compBuildOrder      = buildOrder,

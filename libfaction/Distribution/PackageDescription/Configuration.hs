@@ -66,7 +66,7 @@ import Distribution.Package
          ( PackageName, Dependency(..) )
 import Distribution.PackageDescription
          ( GenericPackageDescription(..), PackageDescription(..)
-         , Library(..), Executable(..), BuildInfo(..)
+         , Library(..), Executable(..), App(..), BuildInfo(..)
          , Flag(..), FlagName(..), FlagAssignment
          , Benchmark(..), CondTree(..), ConfVar(..), Condition(..)
          , TestSuite(..) )
@@ -427,41 +427,54 @@ constrainBy left extra =
 -- | Collect up the targets in a TargetSet of tagged targets, storing the
 -- dependencies as we go.
 flattenTaggedTargets :: TargetSet PDTagged ->
-        (Maybe Library, [(String, Executable)], [(String, TestSuite)]
-        , [(String, Benchmark)])
-flattenTaggedTargets (TargetSet targets) = foldr untag (Nothing, [], [], []) targets
+        (Maybe Library, [(String, Executable)], [(String, App)]
+        , [(String, TestSuite)], [(String, Benchmark)])
+flattenTaggedTargets (TargetSet targets) = foldr untag (Nothing, [], [], [], []) targets
   where
-    untag (_, Lib _) (Just _, _, _, _) = bug "Only one library expected"
-    untag (deps, Lib l) (Nothing, exes, tests, bms) =
-        (Just l', exes, tests, bms)
+    untag (_, Lib _) (Just _, _, _, _, _) = bug "Only one library expected"
+    untag (deps, Lib l) (Nothing, exes, apps, tests, bms) =
+        (Just l', exes, apps, tests, bms)
       where
         l' = l {
                 libBuildInfo = (libBuildInfo l) { targetBuildDepends = fromDepMap deps }
             }
-    untag (deps, Exe n e) (mlib, exes, tests, bms)
+    untag (deps, Exe n e) (mlib, exes, apps, tests, bms)
         | any ((== n) . fst) exes = bug "Exe with same name found"
-        | any ((== n) . fst) tests = bug "Test sharing name of exe found"
-        | any ((== n) . fst) bms = bug "Benchmark sharing name of exe found"
-        | otherwise = (mlib, exes ++ [(n, e')], tests, bms)
+        | any ((== n) . fst) apps = bug "Exe sharing name of app found"
+        | any ((== n) . fst) tests = bug "Exe sharing name of test found"
+        | any ((== n) . fst) bms = bug "Exe sharing name of benchmark found"
+        | otherwise = (mlib, exes ++ [(n, e')], apps, tests, bms)
       where
         e' = e {
                 buildInfo = (buildInfo e) { targetBuildDepends = fromDepMap deps }
             }
-    untag (deps, Test n t) (mlib, exes, tests, bms)
+    untag (deps, A n a) (mlib, exes, apps, tests, bms)
+        | any ((== n) . fst) exes = bug "App sharing name of exe found"
+        | any ((== n) . fst) apps = bug "App with same name found"
+        | any ((== n) . fst) tests = bug "App sharing name of test found"
+        | any ((== n) . fst) bms = bug "App sharing name of benchmark found"
+        | otherwise = (mlib, exes, apps ++ [(n, a')], tests, bms)
+      where
+        a' = a {
+                appBuildInfo = (appBuildInfo a) { targetBuildDepends = fromDepMap deps }
+            }
+    untag (deps, Test n t) (mlib, exes, apps, tests, bms)
         | any ((== n) . fst) tests = bug "Test with same name found"
         | any ((== n) . fst) exes = bug "Test sharing name of exe found"
+        | any ((== n) . fst) apps = bug "Test sharing name of app found"
         | any ((== n) . fst) bms = bug "Test sharing name of benchmark found"
-        | otherwise = (mlib, exes, tests ++ [(n, t')], bms)
+        | otherwise = (mlib, exes, apps, tests ++ [(n, t')], bms)
       where
         t' = t {
             testBuildInfo = (testBuildInfo t)
                 { targetBuildDepends = fromDepMap deps }
             }
-    untag (deps, Bench n b) (mlib, exes, tests, bms)
+    untag (deps, Bench n b) (mlib, exes, apps, tests, bms)
         | any ((== n) . fst) bms = bug "Benchmark with same name found"
         | any ((== n) . fst) exes = bug "Benchmark sharing name of exe found"
+        | any ((== n) . fst) apps = bug "Benchmark sharing name of app found"
         | any ((== n) . fst) tests = bug "Benchmark sharing name of test found"
-        | otherwise = (mlib, exes, tests, bms ++ [(n, b')])
+        | otherwise = (mlib, exes, apps, tests, bms ++ [(n, b')])
       where
         b' = b {
             benchmarkBuildInfo = (benchmarkBuildInfo b)
@@ -476,6 +489,7 @@ flattenTaggedTargets (TargetSet targets) = foldr untag (Nothing, [], [], []) tar
 
 data PDTagged = Lib Library
               | Exe String Executable
+              | A String App
               | Test String TestSuite
               | Bench String Benchmark
               | PDNull
@@ -525,11 +539,12 @@ finalizePackageDescription ::
              -- ^ Either missing dependencies or the resolved package
              -- description along with the flag assignments chosen.
 finalizePackageDescription userflags satisfyDep (Platform arch os) impl constraints
-        (GenericPackageDescription pkg flags mlib0 exes0 tests0 bms0) =
+        (GenericPackageDescription pkg flags mlib0 exes0 apps0 tests0 bms0) =
     case resolveFlags of
-      Right ((mlib, exes', tests', bms'), targetSet, flagVals) ->
+      Right ((mlib, exes', apps', tests', bms'), targetSet, flagVals) ->
         Right ( pkg { library = mlib
                     , executables = exes'
+                    , apps = apps'
                     , testSuites = tests'
                     , benchmarks = bms'
                     , buildDepends = fromDepMap (overallDependencies targetSet)
@@ -545,15 +560,17 @@ finalizePackageDescription userflags satisfyDep (Platform arch os) impl constrai
     -- Combine lib, exes, and tests into one list of @CondTree@s with tagged data
     condTrees = maybeToList (fmap (mapTreeData Lib) mlib0 )
                 ++ map (\(name,tree) -> mapTreeData (Exe name) tree) exes0
+                ++ map (\(name,tree) -> mapTreeData (A name) tree) apps0
                 ++ map (\(name,tree) -> mapTreeData (Test name) tree) tests0
                 ++ map (\(name,tree) -> mapTreeData (Bench name) tree) bms0
 
     resolveFlags =
         case resolveWithFlags flagChoices os arch impl constraints condTrees check of
           Right (targetSet, fs) ->
-              let (mlib, exes, tests, bms) = flattenTaggedTargets targetSet in
+              let (mlib, exes, apps, tests, bms) = flattenTaggedTargets targetSet in
               Right ( (fmap libFillInDefaults mlib,
                        map (\(n,e) -> (exeFillInDefaults e) { exeName = n }) exes,
+                       map (\(n,a) -> (appFillInDefaults a) { appName = n }) apps,
                        map (\(n,t) -> (testFillInDefaults t) { testName = n }) tests,
                        map (\(n,b) -> (benchFillInDefaults b) { benchmarkName = n }) bms),
                      targetSet, fs)
@@ -594,9 +611,10 @@ resolveWithFlags [] Distribution.System.Linux Distribution.System.I386 (Distribu
 -- default path will be missing from the package description returned by this
 -- function.
 flattenPackageDescription :: GenericPackageDescription -> PackageDescription
-flattenPackageDescription (GenericPackageDescription pkg _ mlib0 exes0 tests0 bms0) =
+flattenPackageDescription (GenericPackageDescription pkg _ mlib0 exes0 apps0 tests0 bms0) =
     pkg { library = mlib
         , executables = reverse exes
+        , apps = reverse apps
         , testSuites = reverse tests
         , benchmarks = reverse bms
         , buildDepends = ldeps ++ reverse edeps ++ reverse tdeps ++ reverse bdeps
@@ -607,11 +625,15 @@ flattenPackageDescription (GenericPackageDescription pkg _ mlib0 exes0 tests0 bm
                     (Just (libFillInDefaults l), ds)
         Nothing -> (Nothing, [])
     (exes, edeps) = foldr flattenExe ([],[]) exes0
+    (apps, adeps) = foldr flattenApp ([],[]) apps0
     (tests, tdeps) = foldr flattenTst ([],[]) tests0
     (bms, bdeps) = foldr flattenBm ([],[]) bms0
     flattenExe (n, t) (es, ds) =
         let (e, ds') = ignoreConditions t in
         ( (exeFillInDefaults $ e { exeName = n }) : es, ds' ++ ds )
+    flattenApp (n, t) (es, ds) =
+        let (e, ds') = ignoreConditions t in
+        ( (appFillInDefaults $ e { appName = n }) : es, ds' ++ ds )
     flattenTst (n, t) (es, ds) =
         let (e, ds') = ignoreConditions t in
         ( (testFillInDefaults $ e { testName = n }) : es, ds' ++ ds )
@@ -633,6 +655,10 @@ libFillInDefaults lib@(Library { libBuildInfo = bi }) =
 exeFillInDefaults :: Executable -> Executable
 exeFillInDefaults exe@(Executable { buildInfo = bi }) =
     exe { buildInfo = biFillInDefaults bi }
+
+appFillInDefaults :: App -> App
+appFillInDefaults app@(App { appBuildInfo = bi }) =
+    app { appBuildInfo = biFillInDefaults bi }
 
 testFillInDefaults :: TestSuite -> TestSuite
 testFillInDefaults tst@(TestSuite { testBuildInfo = bi }) =
