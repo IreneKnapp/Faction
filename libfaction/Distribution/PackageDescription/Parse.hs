@@ -35,14 +35,14 @@ module Distribution.PackageDescription.Parse (
 import Data.Char  (isSpace)
 import Data.Maybe (listToMaybe, isJust)
 import Data.Monoid ( Monoid(..) )
-import Data.List  (nub, unfoldr, partition, (\\))
+import Data.List  (nub, partition, (\\))
 import Control.Monad (liftM, foldM, when, unless)
 import System.Directory (doesFileExist)
 
 import Distribution.Text
          ( Text(disp, parse), display, simpleParse )
 import Distribution.Compat.ReadP
-         ((+++), option)
+         (option)
 import Text.PrettyPrint
 
 import Distribution.ParseUtils hiding (parseFields)
@@ -51,8 +51,7 @@ import Distribution.Package
          ( PackageIdentifier(..), Dependency(..), packageName, packageVersion )
 import Distribution.ModuleName ( ModuleName )
 import Distribution.Version
-        ( Version(Version), orLaterVersion
-        , LowerBound(..), asVersionIntervals )
+        ( Version(Version), LowerBound(..), asVersionIntervals )
 import Distribution.Verbosity (Verbosity)
 import Distribution.Compiler  (CompilerFlavor(..))
 import Distribution.PackageDescription.Configuration (parseCondition, freeVars)
@@ -540,20 +539,6 @@ parseConstraint (F l n v)
     | n == "build-depends" = runP l n (parseCommaList parse) v
 parseConstraint f = bug $ "Constraint was expected (got: " ++ show f ++ ")"
 
-{-
-headerFieldNames :: [String]
-headerFieldNames = filter (\n -> not (n `elem` constraintFieldNames))
-                 . map fieldName $ pkgDescrFieldDescrs
--}
-
-libFieldNames :: [String]
-libFieldNames = map fieldName libFieldDescrs
-                ++ buildInfoNames ++ constraintFieldNames
-
--- exeFieldNames :: [String]
--- exeFieldNames = map fieldName executableFieldDescrs
---                 ++ buildInfoNames
-
 buildInfoNames :: [String]
 buildInfoNames = map fieldName binfoFieldDescrs
                 ++ map fst deprecatedFieldsBuildInfo
@@ -677,9 +662,6 @@ parsePackageDescription file = do
       where versionOk = factionVersionNeeded <= factionVersion
             message   = "This package requires at least Faction version "
                      ++ display factionVersionNeeded
-
-    isSimpleField (F _ _ _) = True
-    isSimpleField _ = False
 
     -- warn if there's something at the end of the file
     warnIfRest :: PM ()

@@ -40,7 +40,7 @@ import Text.PrettyPrint ((<>))
 -- The reason we have multiple ways to do the classification is because there
 -- are two situations where we need to do it.
 --
--- For parsing os and arch names in .cabal files we really want everyone to be
+-- For parsing os and arch names in .faction files we really want everyone to be
 -- referring to the same or or arch by the same name. Variety is not a virtue
 -- in this case. We don't mind about case though.
 --

@@ -77,7 +77,7 @@ import Distribution.Simple.InstallDirs (InstallDirs(..), PathTemplateEnv, PathTe
                                         substPathTemplate,
                                         initialPathTemplateEnv)
 import Distribution.Simple.LocalBuildInfo
-         ( LocalBuildInfo(..), externalPackageDeps
+         ( LocalBuildInfo(..)
          , Component(..), ComponentLocalBuildInfo(..), withComponentsLBI )
 import Distribution.Simple.BuildPaths ( haddockName,
                                         hscolourPref, autogenModulesDir,

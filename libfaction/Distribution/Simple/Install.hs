@@ -58,7 +58,7 @@ import Distribution.Simple.Utils
          , installOrdinaryFile, die, info, notice, matchDirFileGlob )
 import Distribution.Simple.Compiler
          ( CompilerFlavor(..), compilerFlavor )
-import Distribution.Simple.Setup (CopyFlags(..), CopyDest(..), fromFlag)
+import Distribution.Simple.Setup (CopyFlags(..), fromFlag)
 
 import qualified Distribution.Simple.GHC  as GHC
 

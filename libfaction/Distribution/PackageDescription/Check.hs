@@ -27,7 +27,7 @@ module Distribution.PackageDescription.Check (
   ) where
 
 import Data.Maybe
-         ( isNothing, isJust, catMaybes, maybeToList, fromMaybe )
+         ( isNothing, catMaybes, maybeToList, fromMaybe )
 import Data.List  (sort, group, isPrefixOf, nub, find)
 import Control.Monad
          ( filterM, liftM )
@@ -809,15 +809,18 @@ checkFactionVersion pkg =
   ]
   where
     -- Perform a check on packages that use a version of the spec less than
-    -- the version given. This is for cases where a new Cabal version adds
+    -- the version given. This is for cases where a new Faction version adds
     -- a new feature and we want to check that it is not used prior to that
     -- version.
+    {-
     checkVersion :: [Int] -> Bool -> PackageCheck -> Maybe PackageCheck
     checkVersion ver cond pc
       | specVersion pkg >= Version ver []      = Nothing
       | otherwise                              = check cond pc
+    -}
 
     buildInfoField field         = map field (allBuildInfo pkg)
+    {-
     dataFilesUsingGlobSyntax     = filter usesGlobSyntax (dataFiles pkg)
     extraSrcFilesUsingGlobSyntax = filter usesGlobSyntax (extraSrcFiles pkg)
     usesGlobSyntax str = case parseFileGlob str of
@@ -868,11 +871,13 @@ checkFactionVersion pkg =
         orLaterVersion orEarlierVersion
         (\v v' -> intersectVersionRanges (orLaterVersion v) (earlierVersion v'))
         intersectVersionRanges unionVersionRanges id
+        -}
 
 -- | A variation on the normal 'Text' instance, shows any ()'s in the original
 -- textual syntax. We need to show these otherwise it's confusing to users when
 -- we complain of their presense but do not pretty print them!
 --
+{-
 displayRawVersionRange :: VersionRange -> String
 displayRawVersionRange =
    Disp.render
@@ -900,7 +905,7 @@ displayRawVersionRange =
 displayRawDependency :: Dependency -> String
 displayRawDependency (Dependency pkg vr) =
   display pkg ++ " " ++ displayRawVersionRange vr
-
+-}
 
 -- ------------------------------------------------------------
 -- * Checks on the GenericPackageDescription

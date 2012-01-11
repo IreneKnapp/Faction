@@ -220,7 +220,7 @@ defaultInstallDirs :: CompilerFlavor -> Bool -> Bool -> IO InstallDirTemplates
 defaultInstallDirs comp userInstall _hasLibs = do
   installPrefix <-
       if userInstall
-      then getAppUserDataDirectory "cabal"
+      then getAppUserDataDirectory "faction"
       else case buildOS of
            Windows -> do windowsProgramFilesDir <- getWindowsProgramFilesDir
                          return (windowsProgramFilesDir </> "Haskell")
@@ -229,17 +229,12 @@ defaultInstallDirs comp userInstall _hasLibs = do
       case buildOS of
       Windows -> return "$prefix"
       _       -> case comp of
-                 LHC | userInstall -> getAppUserDataDirectory "lhc"
                  _                 -> return ("$prefix" </> "lib")
   return $ fmap toPathTemplate $ InstallDirs {
       prefix       = installPrefix,
       bindir       = "$prefix" </> "bin",
       libdir       = installLibDir,
       libsubdir    = case comp of
-           Hugs   -> "hugs" </> "packages" </> "$pkg"
-           JHC    -> "$compiler"
-           LHC    -> "$compiler"
-           UHC    -> "$pkgid"
            _other -> "$pkgid" </> "$compiler",
       dynlibdir    = "$libdir",
       libexecdir   = case buildOS of

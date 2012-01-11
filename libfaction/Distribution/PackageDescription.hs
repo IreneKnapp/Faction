@@ -100,8 +100,7 @@ import Distribution.Package
          , Dependency, Package(..) )
 import Distribution.ModuleName ( ModuleName )
 import Distribution.Version
-         ( Version(Version), VersionRange, anyVersion, orLaterVersion
-         , asVersionIntervals, LowerBound(..) )
+         ( Version(Version), VersionRange )
 import Distribution.License  (License(AllRightsReserved))
 import Distribution.Compiler (CompilerFlavor)
 import Distribution.System   (OS, Arch)

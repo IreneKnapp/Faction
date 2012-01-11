@@ -167,13 +167,13 @@ import Distribution.Compat.Exception
 import Distribution.Verbosity
 
 #ifdef VERSION_base
-import qualified Paths_Faction (version)
+import qualified Paths_libfaction (version)
 #endif
 
 -- We only get our own version number when we're building with ourselves
 factionVersion :: Version
 #if defined(VERSION_base)
-factionVersion = Paths_Faction.version
+factionVersion = Paths_libfaction.version
 #elif defined(FACTION_VERSION)
 factionVersion = Version [FACTION_VERSION] []
 #else

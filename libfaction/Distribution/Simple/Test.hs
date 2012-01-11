@@ -191,8 +191,8 @@ testController flags pkg_descr lbi suite preTest cmd postTest logNamer = do
             -- Remove old .tix files if appropriate.
             unless (fromFlag $ testKeepTix flags) $ do
                 let tDir = tixDir distPref $ PD.testName suite
-                exists <- doesDirectoryExist tDir
-                when exists $ removeDirectoryRecursive tDir
+                exists' <- doesDirectoryExist tDir
+                when exists' $ removeDirectoryRecursive tDir
 
             -- Create directory for HPC files.
             createDirectoryIfMissing True $ tixDir distPref $ PD.testName suite

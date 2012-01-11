@@ -118,7 +118,7 @@ import Distribution.Simple.Test (test)
 import Distribution.Simple.Install (install)
 import Distribution.Simple.Haddock (haddock, hscolour)
 import Distribution.Simple.Utils
-         (die, notice, info, warn, setupMessage, chattyTry,
+         (die, notice, info, setupMessage, chattyTry,
           defaultPackageDesc, defaultHookedPackageDesc,
           rawSystemExitWithEnv, factionVersion, topHandler )
 import Distribution.System
