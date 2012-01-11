@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# A script to bootstrap cabal-install.
+# A script to bootstrap faction
 
-# It works by downloading and installing the Cabal, zlib and
-# HTTP packages. It then installs cabal-install itself.
-# It expects to be run inside the cabal-install directory.
+# It works by downloading and installing the zlib and HTTP packages.
+# It then installs faction itself.  It expects to be run inside the
+# faction directory.
 
 # install settings, you can override these by setting environment vars
-PREFIX=${PREFIX:-${HOME}/.cabal}
+PREFIX=${PREFIX:-${HOME}/.faction}
 #VERBOSE
 #EXTRA_CONFIGURE_OPTS
 
@@ -48,7 +48,7 @@ done
 # The version regex says what existing installed versions are ok.
 PARSEC_VER="3.1.1";    PARSEC_VER_REGEXP="[23]\."  # == 2.* || == 3.*
 NETWORK_VER="2.3.0.2"; NETWORK_VER_REGEXP="2\."    # == 2.*
-CABAL_VER="1.10.1.0";  CABAL_VER_REGEXP="1\.10\.[^0]"  # == 1.10.* && >= 1.10.1
+LIBFACTION_VER="1.0";  LIBFACTION_VER_REGEXP="1\." # == 1.*
 TRANS_VER="0.2.2.0";   TRANS_VER_REGEXP="0\.2\."   # == 0.2.*
 MTL_VER="2.0.1.0";     MTL_VER_REGEXP="[12]\."     # == 1.* || == 2.*
 HTTP_VER="4000.1.1";   HTTP_VER_REGEXP="4000\.[01]\." # == 4000.0.* || 4000.1.*
@@ -59,14 +59,14 @@ HACKAGE_URL="http://hackage.haskell.org/packages/archive"
 
 die () {
   echo
-  echo "Error during cabal-install bootstrap:"
+  echo "Error during faction bootstrap:"
   echo $1 >&2
   exit 2
 }
 
 # Check we're in the right directory:
-grep "cabal-install" ./cabal-install.cabal > /dev/null 2>&1 \
-  || die "The bootstrap.sh script must be run in the cabal-install directory"
+grep "faction" ./faction.faction > /dev/null 2>&1 \
+  || die "The bootstrap.sh script must be run in the faction directory"
 
 ${GHC} --numeric-version > /dev/null \
   || die "${GHC} not found (or could not be run). If ghc is installed make sure it is on your PATH or set the GHC and GHC_PKG vars."
@@ -148,7 +148,7 @@ install_pkg () {
   [ -x Setup ] && ./Setup clean
   [ -f Setup ] && rm Setup
 
-  ${GHC} --make Setup -o Setup \
+  ${GHC} --make Setup -hide-package Cabal -o Setup \
     || die "Compiling the Setup script failed"
   [ -x Setup ] || die "The Setup script does not exist or cannot be run"
 
@@ -183,7 +183,7 @@ do_pkg () {
 
 # Actually do something!
 
-info_pkg "Cabal"        ${CABAL_VER}   ${CABAL_VER_REGEXP}
+info_pkg "libfaction"   ${LIBFACTION_VER} ${LIBFACTION_VER_REGEXP}
 info_pkg "transformers" ${TRANS_VER}   ${TRANS_VER_REGEXP}
 info_pkg "mtl"          ${MTL_VER}     ${MTL_VER_REGEXP}
 info_pkg "parsec"       ${PARSEC_VER}  ${PARSEC_VER_REGEXP}
@@ -192,7 +192,7 @@ info_pkg "time"         ${TIME_VER}    ${TIME_VER_REGEXP}
 info_pkg "HTTP"         ${HTTP_VER}    ${HTTP_VER_REGEXP}
 info_pkg "zlib"         ${ZLIB_VER}    ${ZLIB_VER_REGEXP}
 
-do_pkg   "Cabal"        ${CABAL_VER}   ${CABAL_VER_REGEXP}
+do_pkg   "libfaction"   ${LIBFACTION_VER} ${LIBFACTION_VER_REGEXP}
 do_pkg   "transformers" ${TRANS_VER}   ${TRANS_VER_REGEXP}
 do_pkg   "mtl"          ${MTL_VER}     ${MTL_VER_REGEXP}
 do_pkg   "parsec"       ${PARSEC_VER}  ${PARSEC_VER_REGEXP}
@@ -201,30 +201,30 @@ do_pkg   "time"         ${TIME_VER}    ${TIME_VER_REGEXP}
 do_pkg   "HTTP"         ${HTTP_VER}    ${HTTP_VER_REGEXP}
 do_pkg   "zlib"         ${ZLIB_VER}    ${ZLIB_VER_REGEXP}
 
-install_pkg "cabal-install"
+install_pkg "faction"
 
 echo
 echo "==========================================="
-CABAL_BIN="$PREFIX/bin"
-if [ -x "$CABAL_BIN/cabal" ]
+FACTION_BIN="$PREFIX/bin"
+if [ -x "$FACTION_BIN/faction" ]
 then
-    echo "The 'cabal' program has been installed in $CABAL_BIN/"
-    echo "You should either add $CABAL_BIN to your PATH"
-    echo "or copy the cabal program to a directory that is on your PATH."
+    echo "The 'faction' program has been installed in $FACTION_BIN/"
+    echo "You should either add $FACTION_BIN to your PATH"
+    echo "or copy the faction program to a directory that is on your PATH."
     echo
     echo "The first thing to do is to get the latest list of packages with:"
-    echo "  cabal update"
+    echo "  faction update"
     echo "This will also create a default config file (if it does not already"
-    echo "exist) at $HOME/.cabal/config"
+    echo "exist) at $HOME/.faction/config"
     echo
-    echo "By default cabal will install programs to $HOME/.cabal/bin"
+    echo "By default faction will install programs to $HOME/.faction/bin"
     echo "If you do not want to add this directory to your PATH then you can"
     echo "change the setting in the config file, for example you could use:"
     echo "symlink-bindir: $HOME/bin"
 else
     echo "Sorry, something went wrong."
-    echo "The 'cabal' executable was not successfully installed into"
-    echo "$CABAL_BIN/"
+    echo "The 'faction' executable was not successfully installed into"
+    echo "$FACTION_BIN/"
 fi
 echo
 
