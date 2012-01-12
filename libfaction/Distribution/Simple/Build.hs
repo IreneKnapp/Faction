@@ -284,7 +284,7 @@ initialBuildSteps _distPref pkg_descr lbi verbosity = do
 
   writeAutogenFiles verbosity pkg_descr lbi
 
--- | Generate and write out the Paths_<pkg>.hs and cabal_macros.h files
+-- | Generate and write out the Paths_<pkg>.hs and faction_macros.h files
 --
 writeAutogenFiles :: Verbosity
                   -> PackageDescription

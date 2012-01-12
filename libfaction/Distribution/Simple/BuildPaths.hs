@@ -93,7 +93,7 @@ autogenModulesDir :: LocalBuildInfo -> String
 autogenModulesDir lbi = buildDir lbi </> "autogen"
 
 cppHeaderName :: String
-cppHeaderName = "cabal_macros.h"
+cppHeaderName = "faction_macros.h"
 
 -- |The name of the auto-generated module associated with a package
 autogenModuleName :: PackageDescription -> ModuleName
