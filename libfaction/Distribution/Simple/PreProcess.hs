@@ -64,6 +64,7 @@ import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription as PD
          ( PackageDescription(..), BuildInfo(..)
          , Executable(..)
+         , App(..)
          , Library(..), libModules
          , TestSuite(..), testModules
          , TestSuiteInterface(..)
@@ -199,6 +200,14 @@ preprocessComponent pd comp lbi isSrcDist verbosity handlers = case comp of
       pre dirs exeDir (localHandlers bi)
     pre (hsSourceDirs bi) exeDir (localHandlers bi) $
       dropExtensions (modulePath exe)
+  (CApp app@App { appBuildInfo = bi, appName = nm}) -> do
+    let appDir = buildDir lbi </> nm </> nm ++ "-tmp"
+        dirs   = hsSourceDirs bi ++ [autogenModulesDir lbi]
+    setupMessage verbosity ("Preprocessing app '" ++ nm ++ "' for") (packageId pd)
+    forM_ (map ModuleName.toFilePath $ otherModules bi) $
+      pre dirs appDir (localHandlers bi)
+    pre (hsSourceDirs bi) appDir (localHandlers bi) $
+      dropExtensions (appModulePath app)
   CTest test@TestSuite{ testName = nm } -> do
     setupMessage verbosity ("Preprocessing test suite '" ++ nm ++ "' for") (packageId pd)
     case testInterface test of

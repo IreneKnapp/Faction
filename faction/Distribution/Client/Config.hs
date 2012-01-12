@@ -18,7 +18,7 @@ module Distribution.Client.Config (
     showConfigWithComments,
     parseConfig,
 
-    defaultCabalDir,
+    defaultFactionDir,
     defaultConfigFile,
     defaultCacheDir,
     defaultLogsDir,
@@ -158,7 +158,7 @@ updateInstallDirs userInstallFlag
 --
 baseSavedConfig :: IO SavedConfig
 baseSavedConfig = do
-  userPrefix <- defaultCabalDir
+  userPrefix <- defaultFactionDir
   logsDir    <- defaultLogsDir
   worldFile  <- defaultWorldFile
   return mempty {
@@ -200,29 +200,29 @@ initialSavedConfig = do
   }
 
 --TODO: misleading, there's no way to override this default
---      either make it possible or rename to simply getCabalDir.
-defaultCabalDir :: IO FilePath
-defaultCabalDir = getAppUserDataDirectory "cabal"
+--      either make it possible or rename to simply getFactionDir.
+defaultFactionDir :: IO FilePath
+defaultFactionDir = getAppUserDataDirectory "faction"
 
 defaultConfigFile :: IO FilePath
 defaultConfigFile = do
-  dir <- defaultCabalDir
+  dir <- defaultFactionDir
   return $ dir </> "config"
 
 defaultCacheDir :: IO FilePath
 defaultCacheDir = do
-  dir <- defaultCabalDir
+  dir <- defaultFactionDir
   return $ dir </> "packages"
 
 defaultLogsDir :: IO FilePath
 defaultLogsDir = do
-  dir <- defaultCabalDir
+  dir <- defaultFactionDir
   return $ dir </> "logs"
 
 -- | Default position of the world file
 defaultWorldFile :: IO FilePath
 defaultWorldFile = do
-  dir <- defaultCabalDir
+  dir <- defaultFactionDir
   return $ dir </> "world"
 
 defaultCompiler :: CompilerFlavor
@@ -247,7 +247,7 @@ loadConfig :: Verbosity -> Flag FilePath -> Flag Bool -> IO SavedConfig
 loadConfig verbosity configFileFlag userInstallFlag = addBaseConf $ do
   let sources = [
         ("commandline option",   return . flagToMaybe $ configFileFlag),
-        ("env var CABAL_CONFIG", lookup "CABAL_CONFIG" `liftM` getEnvironment),
+        ("env var FACTION_CONFIG", lookup "FACTION_CONFIG" `liftM` getEnvironment),
         ("default config file",  Just `liftM` defaultConfigFile) ]
 
       getSource [] = error "no config file path candidate found."
@@ -299,7 +299,7 @@ writeConfigFile file comments vals = do
   writeFile file $ explanation ++ showConfigWithComments comments vals ++ "\n"
   where
     explanation = unlines
-      ["-- This is the configuration file for the 'cabal' command line tool."
+      ["-- This is the configuration file for the 'faction' command line tool."
       ,""
       ,"-- The available configuration options are listed below."
       ,"-- Some of them have default values listed."
@@ -310,7 +310,7 @@ writeConfigFile file comments vals = do
       ,"",""
       ]
 
--- | These are the default values that get used in Cabal if a no value is
+-- | These are the default values that get used in Faction if no value is
 -- given. We use these here to include in comments when we write out the
 -- initial config file so that the user can see what default value they are
 -- overriding.
@@ -514,7 +514,7 @@ parseFields fields initial = foldM setField initial
       warning $ "Unrecognized stanza on line " ++ show (lineNo f)
       return accum
 
--- | This is a customised version of the function from Cabal that also prints
+-- | This is a customised version of the function from Faction that also prints
 -- default values for empty fields as comments.
 --
 ppFields :: [FieldDescr a] -> a -> a -> Disp.Doc

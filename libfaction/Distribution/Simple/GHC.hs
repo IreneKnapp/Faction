@@ -126,12 +126,12 @@ import Data.Monoid              ( Monoid(..) )
 import System.Directory
          ( removeFile, getDirectoryContents, doesFileExist
          , getTemporaryDirectory )
-import System.FilePath          ( (<.>), takeExtension,
+import System.FilePath          ( (</>), (<.>), takeExtension,
                                   takeDirectory, replaceExtension, splitExtension )
 import System.IO (hClose, hPutStrLn)
 import Distribution.Compat.Exception (catchExit, catchIO)
 import Distribution.Compat.Filesystem
-         ( (</>), removeDirectoryRecursiveSilently )
+         ( removeDirectoryRecursiveSilently )
 
 -- -----------------------------------------------------------------------------
 -- Configuring

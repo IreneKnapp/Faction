@@ -201,7 +201,7 @@ appFieldDescrs =
   , simpleField "info-plist"
       showFilePath                parseFilePathQ
       appInfoPlist                (\xs    app -> app{appInfoPlist=xs})
-  , simpleField "resource-directory"
+  , simpleField "resource-dir"
       (maybe empty showFilePath)  (fmap Just parseFilePathQ)
       appResourceDirectory        (\path app -> app{appResourceDirectory=path})
   , listField   "xibs"

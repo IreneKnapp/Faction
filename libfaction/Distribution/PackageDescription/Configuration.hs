@@ -404,6 +404,7 @@ overallDependencies (TargetSet targets) = mconcat depss
     removeDisabledSections :: PDTagged -> Bool
     removeDisabledSections (Lib _) = True
     removeDisabledSections (Exe _ _) = True
+    removeDisabledSections (A _ _) = True
     removeDisabledSections (Test _ t) = testEnabled t
     removeDisabledSections (Bench _ b) = benchmarkEnabled b
     removeDisabledSections PDNull = True

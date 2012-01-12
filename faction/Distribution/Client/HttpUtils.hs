@@ -39,7 +39,7 @@ import Foreign
 #endif
 import System.Environment (getEnvironment)
 
-import qualified Paths_cabal_install (version)
+import qualified Paths_faction (version)
 import Distribution.Verbosity (Verbosity)
 import Distribution.Simple.Utils
          ( die, info, warn, debug
@@ -148,7 +148,7 @@ mkRequest uri = Request{ rqURI     = uri
                        , rqMethod  = GET
                        , rqHeaders = [Header HdrUserAgent userAgent]
                        , rqBody    = ByteString.empty }
-  where userAgent = "cabal-install/" ++ display Paths_cabal_install.version
+  where userAgent = "faction/" ++ display Paths_faction.version
 
 -- |Carry out a GET request, using the local proxy settings
 getHTTP :: Verbosity -> URI -> IO (Result (Response ByteString))

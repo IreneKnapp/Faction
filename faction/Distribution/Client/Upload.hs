@@ -95,8 +95,8 @@ report verbosity repos mUsername mPassword = do
                  }
       forM_ repos $ \repo -> case repoKind repo of
         Left remoteRepo
-            -> do dotCabal <- defaultCabalDir
-                  let srcDir = dotCabal </> "reports" </> remoteRepoName remoteRepo
+            -> do dotFaction <- defaultFactionDir
+                  let srcDir = dotFaction </> "reports" </> remoteRepoName remoteRepo
                   -- We don't want to bomb out just because we haven't built any packages from this repo yet
                   srcExists <- doesDirectoryExist srcDir
                   when srcExists $ do

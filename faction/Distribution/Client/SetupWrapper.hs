@@ -8,9 +8,9 @@
 -- Stability   :  alpha
 -- Portability :  portable
 --
--- An interface to building and installing Cabal packages.
+-- An interface to building and installing Faction packages.
 -- If the @Built-Type@ field is specified as something other than
--- 'Custom', and the current version of Cabal is acceptable, this performs
+-- 'Custom', and the current version of Faction is acceptable, this performs
 -- setup actions directly.  Otherwise it builds the setup script and
 -- runs it with the given arguments.
 
@@ -23,7 +23,6 @@ module Distribution.Client.SetupWrapper (
 import Distribution.Client.Types
          ( InstalledPackage )
 
-import qualified Distribution.Make as Make
 import qualified Distribution.Simple as Simple
 import Distribution.Version
          ( Version(..), VersionRange, anyVersion
@@ -56,7 +55,7 @@ import Distribution.Simple.PackageIndex (PackageIndex)
 import Distribution.Client.IndexUtils
          ( getInstalledPackages )
 import Distribution.Simple.Utils
-         ( die, debug, info, cabalVersion, findPackageDesc, comparing
+         ( die, debug, info, factionVersion, findPackageDesc, comparing
          , createDirectoryIfMissingVerbose, rewriteFile, intercalate )
 import Distribution.Client.Utils
          ( moreRecentFile, inDir )
@@ -76,26 +75,26 @@ import Data.Maybe        ( fromMaybe, isJust )
 import Data.Char         ( isSpace )
 
 data SetupScriptOptions = SetupScriptOptions {
-    useCabalVersion  :: VersionRange,
-    useCompiler      :: Maybe Compiler,
-    usePackageDB     :: PackageDBStack,
-    usePackageIndex  :: Maybe PackageIndex,
-    useProgramConfig :: ProgramConfiguration,
-    useDistPref      :: FilePath,
-    useLoggingHandle :: Maybe Handle,
-    useWorkingDir    :: Maybe FilePath
+    useFactionVersion :: VersionRange,
+    useCompiler       :: Maybe Compiler,
+    usePackageDB      :: PackageDBStack,
+    usePackageIndex   :: Maybe PackageIndex,
+    useProgramConfig  :: ProgramConfiguration,
+    useDistPref       :: FilePath,
+    useLoggingHandle  :: Maybe Handle,
+    useWorkingDir     :: Maybe FilePath
   }
 
 defaultSetupScriptOptions :: SetupScriptOptions
 defaultSetupScriptOptions = SetupScriptOptions {
-    useCabalVersion  = anyVersion,
-    useCompiler      = Nothing,
-    usePackageDB     = [GlobalPackageDB, UserPackageDB],
-    usePackageIndex  = Nothing,
-    useProgramConfig = emptyProgramConfiguration,
-    useDistPref      = defaultDistPref,
-    useLoggingHandle = Nothing,
-    useWorkingDir    = Nothing
+    useFactionVersion = anyVersion,
+    useCompiler       = Nothing,
+    usePackageDB      = [GlobalPackageDB, UserPackageDB],
+    usePackageIndex   = Nothing,
+    useProgramConfig  = emptyProgramConfiguration,
+    useDistPref       = defaultDistPref,
+    useLoggingHandle  = Nothing,
+    useWorkingDir     = Nothing
   }
 
 setupWrapper :: Verbosity
@@ -109,13 +108,13 @@ setupWrapper verbosity options mpkg cmd flags extraArgs = do
   pkg <- maybe getPkg return mpkg
   let setupMethod = determineSetupMethod options' buildType'
       options'    = options {
-                      useCabalVersion = intersectVersionRanges
-                                          (useCabalVersion options)
+                      useFactionVersion = intersectVersionRanges
+                                          (useFactionVersion options)
                                           (orLaterVersion (specVersion pkg))
                     }
       buildType'  = fromMaybe Custom (buildType pkg)
-      mkArgs cabalLibVersion = commandName cmd
-                             : commandShowOptions cmd (flags cabalLibVersion)
+      mkArgs libfactionVersion = commandName cmd
+                             : commandShowOptions cmd (flags libfactionVersion)
                             ++ extraArgs
   checkBuildType buildType'
   setupMethod verbosity options' (packageId pkg) buildType' mkArgs
@@ -130,15 +129,15 @@ setupWrapper verbosity options mpkg cmd flags extraArgs = do
     checkBuildType _ = return ()
 
 -- | Decide if we're going to be able to do a direct internal call to the
--- entry point in the Cabal library or if we're going to have to compile
+-- entry point in libfaction or if we're going to have to compile
 -- and execute an external Setup.hs script.
 --
 determineSetupMethod :: SetupScriptOptions -> BuildType -> SetupMethod
 determineSetupMethod options buildType'
   | isJust (useLoggingHandle options)
  || buildType' == Custom      = externalSetupMethod
-  | cabalVersion `withinRange`
-      useCabalVersion options = internalSetupMethod
+  | factionVersion `withinRange`
+      useFactionVersion options = internalSetupMethod
   | otherwise                 = externalSetupMethod
 
 type SetupMethod = Verbosity
@@ -153,7 +152,7 @@ type SetupMethod = Verbosity
 
 internalSetupMethod :: SetupMethod
 internalSetupMethod verbosity options _ bt mkargs = do
-  let args = mkargs cabalVersion
+  let args = mkargs factionVersion
   debug verbosity $ "Using internal setup method with build-type " ++ show bt
                  ++ " and args:\n  " ++ show args
   inDir (useWorkingDir options) $
@@ -163,7 +162,6 @@ buildTypeAction :: BuildType -> ([String] -> IO ())
 buildTypeAction Simple    = Simple.defaultMainArgs
 buildTypeAction Configure = Simple.defaultMainWithHooksArgs
                               Simple.autoconfUserHooks
-buildTypeAction Make      = Make.defaultMainArgs
 buildTypeAction Custom               = error "buildTypeAction Custom"
 buildTypeAction (UnknownBuildType _) = error "buildTypeAction UnknownBuildType"
 
@@ -175,12 +173,12 @@ externalSetupMethod :: SetupMethod
 externalSetupMethod verbosity options pkg bt mkargs = do
   debug verbosity $ "Using external setup method with build-type " ++ show bt
   createDirectoryIfMissingVerbose verbosity True setupDir
-  (cabalLibVersion, options') <- cabalLibVersionToUse
-  debug verbosity $ "Using Cabal library version " ++ display cabalLibVersion
-  setupHs <- updateSetupScript cabalLibVersion bt
+  (libfactionVersion, options') <- libfactionVersionToUse
+  debug verbosity $ "Using libfaction version " ++ display libfactionVersion
+  setupHs <- updateSetupScript libfactionVersion bt
   debug verbosity $ "Using " ++ setupHs ++ " as setup script."
-  compileSetupExecutable options' cabalLibVersion setupHs
-  invokeSetupScript (mkargs cabalLibVersion)
+  compileSetupExecutable options' libfactionVersion setupHs
+  invokeSetupScript (mkargs libfactionVersion)
 
   where
   workingDir       = case fromMaybe "" (useWorkingDir options) of
@@ -190,37 +188,38 @@ externalSetupMethod verbosity options pkg bt mkargs = do
   setupVersionFile = setupDir </> "setup" <.> "version"
   setupProgFile    = setupDir </> "setup" <.> exeExtension
 
-  cabalLibVersionToUse :: IO (Version, SetupScriptOptions)
-  cabalLibVersionToUse = do
-    savedVersion <- savedCabalVersion
+  libfactionVersionToUse :: IO (Version, SetupScriptOptions)
+  libfactionVersionToUse = do
+    savedVersion <- savedFactionVersion
     case savedVersion of
-      Just version | version `withinRange` useCabalVersion options
+      Just version | version `withinRange` useFactionVersion options
         -> return (version, options)
       _ -> do (comp, conf, options') <- configureCompiler options
-              version <- installedCabalVersion options comp conf
+              version <- installedFactionVersion options comp conf
               writeFile setupVersionFile (show version ++ "\n")
               return (version, options')
 
-  savedCabalVersion = do
+  savedFactionVersion = do
     versionString <- readFile setupVersionFile `catch` \_ -> return ""
     case reads versionString of
       [(version,s)] | all isSpace s -> return (Just version)
       _                             -> return Nothing
 
-  installedCabalVersion :: SetupScriptOptions -> Compiler
+  installedFactionVersion :: SetupScriptOptions -> Compiler
                         -> ProgramConfiguration -> IO Version
-  installedCabalVersion _ _ _ | packageName pkg == PackageName "Cabal" =
+  installedFactionVersion _ _ _ | packageName pkg == PackageName "libfaction" =
     return (packageVersion pkg)
-  installedCabalVersion options' comp conf = do
+  installedFactionVersion options' comp conf = do
     index <- case usePackageIndex options' of
       Just index -> return index
       Nothing    -> getInstalledPackages verbosity
                       comp (usePackageDB options') conf
 
-    let cabalDep = Dependency (PackageName "Cabal") (useCabalVersion options)
-    case PackageIndex.lookupDependency index cabalDep of
-      []   -> die $ "The package requires Cabal library version "
-                 ++ display (useCabalVersion options)
+    let factionDep = Dependency (PackageName "libfaction")
+                                (useFactionVersion options)
+    case PackageIndex.lookupDependency index factionDep of
+      []   -> die $ "The package requires libfaction version "
+                 ++ display (useFactionVersion options)
                  ++ " but no suitable version is installed."
       pkgs -> return $ bestVersion (map fst pkgs)
     where
@@ -228,8 +227,8 @@ externalSetupMethod verbosity options pkg bt mkargs = do
       preference version   = (sameVersion, sameMajorVersion
                              ,stableVersion, latestVersion)
         where
-          sameVersion      = version == cabalVersion
-          sameMajorVersion = majorVersion version == majorVersion cabalVersion
+          sameVersion      = version == factionVersion
+          sameMajorVersion = majorVersion version == majorVersion factionVersion
           majorVersion     = take 2 . versionBranch
           stableVersion    = case versionBranch version of
                                (_:x:_) -> even x
@@ -259,20 +258,19 @@ externalSetupMethod verbosity options pkg bt mkargs = do
       setupHs  = workingDir </> "Setup.hs"
       setupLhs = workingDir </> "Setup.lhs"
 
-  updateSetupScript cabalLibVersion _ = do
-    rewriteFile setupHs (buildTypeScript cabalLibVersion)
+  updateSetupScript libfactionVersion _ = do
+    rewriteFile setupHs (buildTypeScript libfactionVersion)
     return setupHs
     where
       setupHs  = setupDir </> "setup.hs"
 
   buildTypeScript :: Version -> String
-  buildTypeScript cabalLibVersion = case bt of
+  buildTypeScript libfactionVersion = case bt of
     Simple    -> "import Distribution.Simple; main = defaultMain\n"
     Configure -> "import Distribution.Simple; main = defaultMainWithHooks "
-              ++ if cabalLibVersion >= Version [1,3,10] []
+              ++ if libfactionVersion >= Version [1,3,10] []
                    then "autoconfUserHooks\n"
                    else "defaultUserHooks\n"
-    Make      -> "import Distribution.Make; main = defaultMain\n"
     Custom             -> error "buildTypeScript Custom"
     UnknownBuildType _ -> error "buildTypeScript UnknownBuildType"
 
@@ -280,25 +278,26 @@ externalSetupMethod verbosity options pkg bt mkargs = do
   -- Currently this is GHC only. It should really be generalised.
   --
   compileSetupExecutable :: SetupScriptOptions -> Version -> FilePath -> IO ()
-  compileSetupExecutable options' cabalLibVersion setupHsFile = do
+  compileSetupExecutable options' libfactionVersion setupHsFile = do
     setupHsNewer      <- setupHsFile      `moreRecentFile` setupProgFile
     cabalVersionNewer <- setupVersionFile `moreRecentFile` setupProgFile
     let outOfDate = setupHsNewer || cabalVersionNewer
     when outOfDate $ do
       debug verbosity "Setup script is out of date, compiling..."
       (_, conf, _) <- configureCompiler options'
-      --TODO: get Cabal's GHC module to export a GhcOptions type and render func
+      --TODO: get Faction's GHC module to export a GhcOptions type and render func
       rawSystemProgramConf verbosity ghcProgram conf $
           ghcVerbosityOptions verbosity
        ++ ["--make", setupHsFile, "-o", setupProgFile
           ,"-odir", setupDir, "-hidir", setupDir
           ,"-i", "-i" ++ workingDir ]
        ++ ghcPackageDbOptions (usePackageDB options')
-       ++ if packageName pkg == PackageName "Cabal"
+       ++ if packageName pkg == PackageName "libfaction"
             then []
-            else ["-package", display cabalPkgid]
+            else ["-package", display libfactionPkgid]
     where
-      cabalPkgid = PackageIdentifier (PackageName "Cabal") cabalLibVersion
+      libfactionPkgid =
+        PackageIdentifier (PackageName "libfaction") libfactionVersion
 
       ghcPackageDbOptions :: PackageDBStack -> [String]
       ghcPackageDbOptions dbstack = case dbstack of

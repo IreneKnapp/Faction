@@ -235,10 +235,10 @@ filterConfigureFlags flags cabalLibVersion
 -- | cabal configure takes some extra flags beyond runghc Setup configure
 --
 data ConfigExFlags = ConfigExFlags {
-    configCabalVersion :: Flag Version,
-    configExConstraints:: [UserConstraint],
-    configPreferences  :: [Dependency],
-    configSolver       :: Flag Solver
+    configFactionVersion :: Flag Version,
+    configExConstraints   :: [UserConstraint],
+    configPreferences     :: [Dependency],
+    configSolver          :: Flag Solver
   }
 
 defaultConfigExFlags :: ConfigExFlags
@@ -259,10 +259,10 @@ configureExCommand = configureCommand {
 configureExOptions ::  ShowOrParseArgs -> [OptionField ConfigExFlags]
 configureExOptions _showOrParseArgs =
   [ option [] ["cabal-lib-version"]
-      ("Select which version of the Cabal lib to use to build packages "
+      ("Select which version of libfaction to use to build packages "
       ++ "(useful for testing).")
-      configCabalVersion (\v flags -> flags { configCabalVersion = v })
-      (reqArg "VERSION" (readP_to_E ("Cannot parse cabal lib version: "++)
+      configFactionVersion (\v flags -> flags { configFactionVersion = v })
+      (reqArg "VERSION" (readP_to_E ("Cannot parse libfaction version: "++)
                                     (fmap toFlag parse))
                         (map display . flagToList))
   , option [] ["constraint"]
@@ -285,16 +285,16 @@ configureExOptions _showOrParseArgs =
 
 instance Monoid ConfigExFlags where
   mempty = ConfigExFlags {
-    configCabalVersion = mempty,
-    configExConstraints= mempty,
-    configPreferences  = mempty,
-    configSolver       = mempty
+    configFactionVersion = mempty,
+    configExConstraints  = mempty,
+    configPreferences    = mempty,
+    configSolver         = mempty
   }
   mappend a b = ConfigExFlags {
-    configCabalVersion = combine configCabalVersion,
-    configExConstraints= combine configExConstraints,
-    configPreferences  = combine configPreferences,
-    configSolver       = combine configSolver
+    configFactionVersion = combine configFactionVersion,
+    configExConstraints  = combine configExConstraints,
+    configPreferences    = combine configPreferences,
+    configSolver         = combine configSolver
   }
     where combine field = field a `mappend` field b
 

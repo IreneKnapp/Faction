@@ -60,7 +60,7 @@ convIPId pn' idx ipid =
                     pn = pkgName (sourcePackageId ipi)
                 in  Just (D.Simple (Dep pn (Fixed i (Goal (P pn') []))))
 
--- | Convert a cabal-install source package index to the simpler,
+-- | Convert a faction source package index to the simpler,
 -- more uniform index format of the solver.
 convSPI :: OS -> Arch -> CompilerId ->
            CI.PackageIndex SourcePackage -> Index
@@ -84,13 +84,15 @@ convGPD :: OS -> Arch -> CompilerId ->
            PI PN -> GenericPackageDescription -> PInfo
 convGPD os arch cid
         pi@(PI _pn _i)
-        (GenericPackageDescription _ flags libs exes tests benchs) =
+        (GenericPackageDescription _ flags libs exes apps tests benchs) =
   let
     fds = flagDefaults flags
   in
     PInfo
       (maybe []  (convCondTree os arch cid pi fds (const True)          ) libs   ++
        concatMap (convCondTree os arch cid pi fds (const True)     . snd) exes   ++
+       concatMap (convCondTree os arch cid pi fds (const True)     . snd) apps
+       ++
        concatMap (convCondTree os arch cid pi fds testEnabled      . snd) tests  ++
        concatMap (convCondTree os arch cid pi fds benchmarkEnabled . snd) benchs)
       fds

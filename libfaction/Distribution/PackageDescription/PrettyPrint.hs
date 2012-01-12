@@ -50,14 +50,14 @@ import Distribution.PackageDescription
        ( TestSuite(..), TestSuiteInterface(..), testType
        , SourceRepo(..),
         customFieldsBI, CondTree(..), Condition(..),
-        FlagName(..), ConfVar(..), Executable(..), Library(..),
+        FlagName(..), ConfVar(..), Executable(..), App(..), Library(..),
         Flag(..), PackageDescription(..),
         GenericPackageDescription(..))
 import Text.PrettyPrint
        (hsep, comma, punctuate, fsep, parens, char, nest, empty,
         isEmpty, ($$), (<+>), colon, (<>), text, vcat, ($+$), Doc, render)
 import Distribution.Simple.Utils (writeUTF8File)
-import Distribution.ParseUtils (showFreeText, FieldDescr(..))
+import Distribution.ParseUtils (showFreeText, showFilePath, FieldDescr(..))
 import Distribution.PackageDescription.Parse (pkgDescrFieldDescrs,binfoFieldDescrs,libFieldDescrs,
        sourceRepoFieldDescrs)
 import Distribution.Package (Dependency(..))
@@ -164,10 +164,10 @@ ppExecutables exes                       =
             $+$ ppCustomFields (customFieldsBI buildInfo')
 
 ppApps :: [(String, CondTree ConfVar [Dependency] App)] -> Doc
-ppApps exes                       =
+ppApps apps                       =
     vcat [emptyLine $ text ("app " ++ n)
               $+$ nest indentWith (ppCondTree condTree Nothing ppApp)| (n,condTree) <- apps]
-  where IAK
+  where
     ppApp app Nothing =
         (if appModulePath app == ""
            then empty
@@ -177,21 +177,22 @@ ppApps exes                       =
            then empty
            else text "info-plist:" <+> (text $ appInfoPlist app))
         $+$
-        (if appResourceDirectory app == Nothing
-           then empty
-           else text "resource-directory:"
-                <+> (text $ appResourceDirectory app))
+        (case appResourceDirectory app of
+           Nothing -> empty
+           Just resourceDirectory ->
+             text "resource-dir:" <+> text resourceDirectory)
         $+$
         (if appXIBs app == []
            then empty
-           else text "xibs:" <+> (text $ appXIBs app))
+           else text "xibs:" <+> (fsep . map showFilePath) (appXIBs app))
         $+$
         (if appOtherResources app == []
            then empty
-           else text "other-resources:" <+> (text $ appOtherResources app))
+           else text "other-resources:"
+                <+> (fsep . map showFilePath) (appOtherResources app))
         $+$ (ppFields binfoFieldDescrs $ appBuildInfo app)
         $+$ (ppCustomFields $ customFieldsBI $ appBuildInfo app)
-    ppExe app (Just app2) =
+    ppApp app (Just app2) =
         (if appModulePath app == ""
             || appModulePath app == appModulePath app2
            then empty
@@ -202,21 +203,23 @@ ppApps exes                       =
            then empty
            else text "info-plist:" <+> (text $ appInfoPlist app))
         $+$
-        (if appResourceDirectory app == Nothing
-            || appResourceDirectory app == appResourceDirectory app2
+        (if appResourceDirectory app == appResourceDirectory app2
            then empty
-           else text "resource-directory:"
-                <+> (text $ appResourceDirectory app))
+           else case appResourceDirectory app of
+                  Nothing -> empty
+                  Just resourceDirectory ->
+                    text "resource-dir:" <+> text resourceDirectory)
         $+$
         (if appXIBs app == []
             || appXIBs app == appXIBs app2
            then empty
-           else text "xibs:" <+> (text $ appXIBs app))
+           else text "xibs:" <+> (fsep . map showFilePath) (appXIBs app))
         $+$
         (if appOtherResources app == []
             || appOtherResources app == appOtherResources app2
            then empty
-           else text "other-resources:" <+> (text $ appOtherResources app))
+           else text "other-resources:"
+                <+> (fsep . map showFilePath) (appOtherResources app))
         $+$ ppDiffFields binfoFieldDescrs (appBuildInfo app) (appBuildInfo app2)
         $+$ ppCustomFields (customFieldsBI $ appBuildInfo app)
 

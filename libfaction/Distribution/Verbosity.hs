@@ -10,7 +10,7 @@
 -- verbosity levels from 'silent', 'normal', 'verbose' up to 'deafening'. This
 -- is used for deciding what logging messages to print.
 
--- Verbosity for Cabal functions
+-- Verbosity for Faction functions
 
 {- Copyright (c) 2007, Ian Lynagh
 All rights reserved.
@@ -49,7 +49,7 @@ module Distribution.Verbosity (
   silent, normal, verbose, deafening,
   moreVerbose, lessVerbose,
   intToVerbosity, flagToVerbosity,
-  showForCabal, showForGHC
+  showForFaction, showForGHC
  ) where
 
 import Data.List (elemIndex)
@@ -104,9 +104,9 @@ flagToVerbosity = ReadE $ \s ->
                                      ". Valid values are 0..3")
        _ -> Left ("Can't parse verbosity " ++ s)
 
-showForCabal, showForGHC :: Verbosity -> String
+showForFaction, showForGHC :: Verbosity -> String
 
-showForCabal v = maybe (error "unknown verbosity") show $
+showForFaction v = maybe (error "unknown verbosity") show $
     elemIndex v [silent,normal,verbose,deafening]
 showForGHC   v = maybe (error "unknown verbosity") show $
     elemIndex v [silent,normal,__,verbose,deafening]

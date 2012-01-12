@@ -126,7 +126,7 @@ convert index' = PackageIndex.fromList
 -- All the 'SourcePackage's are marked as having come from the appropriate
 -- 'Repo'.
 --
--- This is a higher level wrapper used internally in cabal-install.
+-- This is a higher level wrapper used internally in faction.
 --
 getSourcePackages :: Verbosity -> [Repo] -> IO SourcePackageDb
 getSourcePackages verbosity [] = do
@@ -155,7 +155,7 @@ getSourcePackages verbosity repos = do
 --
 -- All the 'SourcePackage's are marked as having come from the given 'Repo'.
 --
--- This is a higher level wrapper used internally in cabal-install.
+-- This is a higher level wrapper used internally in faction.
 --
 readRepoIndex :: Verbosity -> Repo
               -> IO (PackageIndex SourcePackage, [Dependency])

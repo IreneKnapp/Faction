@@ -33,7 +33,7 @@ import qualified Distribution.Client.Types as BR
          , DocsResult(..), TestsResult(..) )
 import Distribution.Client.Utils
          ( mergeBy, MergeResult(..) )
-import qualified Paths_cabal_install (version)
+import qualified Paths_faction (version)
 
 import Distribution.Package
          ( PackageIdentifier(..), PackageName(..), Package(packageId) )
@@ -80,7 +80,7 @@ data BuildReport
     -- | The Haskell compiler (and hopefully version) used
     compiler        :: CompilerId,
 
-    -- | The uploading client, ie cabal-install-x.y.z
+    -- | The uploading client, ie faction-x.y.z
     client          :: PackageIdentifier,
 
     -- | Which configurations flags we used
@@ -158,7 +158,7 @@ new os' arch' comp (ConfiguredPackage pkg flags deps) result =
 
 cabalInstallID :: PackageIdentifier
 cabalInstallID =
-  PackageIdentifier (PackageName "cabal-install") Paths_cabal_install.version
+  PackageIdentifier (PackageName "faction") Paths_faction.version
 
 -- ------------------------------------------------------------
 -- * External format

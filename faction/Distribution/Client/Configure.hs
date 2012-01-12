@@ -94,8 +94,8 @@ configure verbosity packageDBs repos comp conf
 
   where
     setupScriptOptions index = SetupScriptOptions {
-      useCabalVersion  = maybe anyVersion thisVersion
-                         (flagToMaybe (configCabalVersion configExFlags)),
+      useFactionVersion  = maybe anyVersion thisVersion
+                           (flagToMaybe (configFactionVersion configExFlags)),
       useCompiler      = Just comp,
       -- Hack: we typically want to allow the UserPackageDB for finding the
       -- Cabal lib when compiling any Setup.hs even if we're doing a global

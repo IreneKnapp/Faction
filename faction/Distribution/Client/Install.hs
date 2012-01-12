@@ -62,7 +62,7 @@ import Distribution.Client.Setup
          , ConfigFlags(..), configureCommand, filterConfigureFlags
          , ConfigExFlags(..), InstallFlags(..) )
 import Distribution.Client.Config
-         ( defaultCabalDir )
+         ( defaultFactionDir )
 import Distribution.Client.Tar (extractTarGzFile)
 import Distribution.Client.Types as Source
 import Distribution.Client.BuildReports.Types
@@ -77,7 +77,7 @@ import qualified Distribution.Client.InstallSymlink as InstallSymlink
 import qualified Distribution.Client.Win32SelfUpgrade as Win32SelfUpgrade
 import qualified Distribution.Client.World as World
 import qualified Distribution.InstalledPackageInfo as Installed
-import Paths_cabal_install (getBinDir)
+import Paths_faction (getBinDir)
 
 import Distribution.Simple.Compiler
          ( CompilerId(..), Compiler(compilerId), compilerFlavor
@@ -90,7 +90,7 @@ import Distribution.Simple.Setup
          ( haddockCommand, HaddockFlags(..)
          , buildCommand, BuildFlags(..), emptyBuildFlags
          , toFlag, fromFlag, fromFlagOrDefault, flagToMaybe )
-import qualified Distribution.Simple.Setup as Cabal
+import qualified Distribution.Simple.Setup as Faction
          ( installCommand, InstallFlags(..), emptyInstallFlags )
 import Distribution.Simple.Utils
          ( rawSystemExit, comparing )
@@ -118,7 +118,7 @@ import Distribution.System
 import Distribution.Text
          ( display )
 import Distribution.Verbosity as Verbosity
-         ( Verbosity, showForCabal, verbose )
+         ( Verbosity, showForFaction, verbose )
 import Distribution.Simple.BuildPaths ( exeExtension )
 
 --TODO:
@@ -524,10 +524,10 @@ postInstallActions verbosity
 storeDetailedBuildReports :: Verbosity -> FilePath
                           -> [(BuildReports.BuildReport, Repo)] -> IO ()
 storeDetailedBuildReports verbosity logsDir reports = sequence_
-  [ do dotCabal <- defaultCabalDir
+  [ do dotFaction <- defaultFactionDir
        let logFileName = display (BuildReports.package report) <.> "log"
            logFile     = logsDir </> logFileName
-           reportsDir  = dotCabal </> "reports" </> remoteRepoName remoteRepo
+           reportsDir  = dotFaction </> "reports" </> remoteRepoName remoteRepo
            reportFile  = reportsDir </> logFileName
 
        handleMissingLogFile $ do
@@ -703,10 +703,10 @@ performInstallations verbosity
     compid   = InstallPlan.planCompiler installPlan
 
     setupScriptOptions index = SetupScriptOptions {
-      useCabalVersion  = maybe anyVersion thisVersion (libVersion miscOptions),
+      useFactionVersion = maybe anyVersion thisVersion (libVersion miscOptions),
       useCompiler      = Just comp,
-      -- Hack: we typically want to allow the UserPackageDB for finding the
-      -- Cabal lib when compiling any Setup.hs even if we're doing a global
+      -- Hack: we typically want to allow the UserPackageDB for finding
+      -- libfaction when compiling any Setup.hs even if we're doing a global
       -- install. However we also allow looking in a specific package db.
       usePackageDB     = if UserPackageDB `elem` packageDBs
                            then packageDBs
@@ -743,7 +743,7 @@ performInstallations verbosity
       rootCmd    = if fromFlag (configUserInstall configFlags)
                      then Nothing      -- ignore --root-cmd if --user.
                      else flagToMaybe (installRootCmd installFlags),
-      libVersion = flagToMaybe (configCabalVersion configExFlags)
+      libVersion = flagToMaybe (configFactionVersion configExFlags)
     }
 
 
@@ -886,7 +886,7 @@ installUnpackedPackage verbosity scriptOptions miscOptions
         withWin32SelfUpgrade verbosity configFlags compid pkg $ do
           case rootCmd miscOptions of
             (Just cmd) -> reexec cmd
-            Nothing    -> setup Cabal.installCommand installFlags
+            Nothing    -> setup Faction.installCommand installFlags
           return (Right (BuildOk docsResult testsResult))
 
   where
@@ -902,9 +902,9 @@ installUnpackedPackage verbosity scriptOptions miscOptions
     haddockFlags' _   = haddockFlags {
       haddockVerbosity = toFlag verbosity'
     }
-    installFlags _   = Cabal.emptyInstallFlags {
-      Cabal.installDistPref  = configDistPref configFlags,
-      Cabal.installVerbosity = toFlag verbosity'
+    installFlags _   = Faction.emptyInstallFlags {
+      Faction.installDistPref  = configDistPref configFlags,
+      Faction.installVerbosity = toFlag verbosity'
     }
     verbosity' | isJust useLogFile = max Verbosity.verbose verbosity
                | otherwise         = verbosity
@@ -933,8 +933,8 @@ installUnpackedPackage verbosity scriptOptions miscOptions
         then inDir workingDir $
                rawSystemExit verbosity cmd
                  [self, "install", "--only"
-                 ,"--verbose=" ++ showForCabal verbosity]
-        else die $ "Unable to find cabal executable at: " ++ self
+                 ,"--verbose=" ++ showForFaction verbosity]
+        else die $ "Unable to find faction executable at: " ++ self
 
 
 -- helper

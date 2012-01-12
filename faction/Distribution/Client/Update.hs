@@ -21,7 +21,7 @@ import Distribution.Client.FetchUtils
 import qualified Distribution.Client.PackageIndex as PackageIndex
 import Distribution.Client.IndexUtils
          ( getSourcePackages, updateRepoIndexCache )
-import qualified Paths_cabal_install
+import qualified Paths_faction
          ( version )
 
 import Distribution.Package
@@ -66,9 +66,9 @@ checkForSelfUpgrade :: Verbosity -> [Repo] -> IO ()
 checkForSelfUpgrade verbosity repos = do
   SourcePackageDb sourcePkgIndex prefs <- getSourcePackages verbosity repos
 
-  let self = PackageName "cabal-install"
+  let self = PackageName "faction"
       preferredVersionRange  = fromMaybe anyVersion (Map.lookup self prefs)
-      currentVersion         = Paths_cabal_install.version
+      currentVersion         = Paths_faction.version
       laterPreferredVersions =
         [ packageVersion pkg
         | pkg <- PackageIndex.lookupPackageName sourcePkgIndex self
@@ -78,6 +78,6 @@ checkForSelfUpgrade verbosity repos = do
 
   when (not (null laterPreferredVersions)) $
     notice verbosity $
-         "Note: there is a new version of cabal-install available.\n"
-      ++ "To upgrade, run: cabal install cabal-install"
+         "Note: there is a new version of faction available.\n"
+      ++ "To upgrade, run: faction install faction"
 

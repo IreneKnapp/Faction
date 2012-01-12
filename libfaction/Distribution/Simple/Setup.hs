@@ -1540,7 +1540,7 @@ optionVerbosity get set =
     get set
     (optArg "n" (fmap Flag flagToVerbosity)
                 (Flag verbose) -- default Value if no n is given
-                (fmap (Just . showForCabal) . flagToList))
+                (fmap (Just . showForFaction) . flagToList))
 
 -- ------------------------------------------------------------
 -- * Other Utils

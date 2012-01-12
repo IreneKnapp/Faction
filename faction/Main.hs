@@ -68,12 +68,12 @@ import Distribution.Simple.Program
 import Distribution.Simple.Command
 import Distribution.Simple.Configure (configCompilerAux)
 import Distribution.Simple.Utils
-         ( cabalVersion, die, topHandler, intercalate )
+         ( factionVersion, die, topHandler, intercalate )
 import Distribution.Text
          ( display )
 import Distribution.Verbosity as Verbosity
        ( Verbosity, normal, intToVerbosity, lessVerbose )
-import qualified Paths_cabal_install (version)
+import qualified Paths_faction (version)
 
 import System.Environment       (getArgs, getProgName)
 import System.Exit              (exitFailure)
@@ -117,12 +117,12 @@ mainWorker args = topHandler $
             ++ "  " ++ configFile ++ "\n"
     printOptionsList = putStr . unlines
     printErrors errs = die $ concat (intersperse "\n" errs)
-    printNumericVersion = putStrLn $ display Paths_cabal_install.version
+    printNumericVersion = putStrLn $ display Paths_faction.version
     printVersion        = putStrLn $ "cabal-install version "
-                                  ++ display Paths_cabal_install.version
+                                  ++ display Paths_faction.version
                                   ++ "\nusing version "
-                                  ++ display cabalVersion
-                                  ++ " of the Cabal library "
+                                  ++ display factionVersion
+                                  ++ " of libfaction "
 
     commands =
       [installCommand         `commandAddAction` installAction
