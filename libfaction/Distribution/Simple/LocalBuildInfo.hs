@@ -243,6 +243,16 @@ withComponentsLBI pkg_descr lbi f = mapM_ compF (compBuildOrder lbi)
         missingexe  = "internal error: component list includes an executable "
                    ++ name ++ " but the package contains no such executable."
 
+    compF (CAppName name) =
+        case find (\app -> appName app == name) (apps pkg_descr) of
+          Nothing  -> die missingapp
+          Just app -> case lookup name (appConfigs lbi) of
+                        Nothing   -> die (missingAppConf name)
+                        Just clbi -> f (CApp app) clbi
+      where
+        missingapp  = "internal error: component list includes an app "
+                   ++ name ++ " but the package contains no such app."
+
     compF (CTestName name) =
         case find (\tst -> testName tst == name) (testSuites pkg_descr) of
           Nothing  -> die missingtest
