@@ -275,7 +275,8 @@ initialBuildSteps _distPref pkg_descr lbi verbosity = do
   -- check that there's something to build
   let buildInfos =
           map libBuildInfo (maybeToList (library pkg_descr)) ++
-          map buildInfo (executables pkg_descr)
+          map buildInfo (executables pkg_descr) ++
+          map appBuildInfo (apps pkg_descr)
   unless (any buildable buildInfos) $ do
     let name = display (packageId pkg_descr)
     die ("Package " ++ name ++ " can't be built on this system.")
