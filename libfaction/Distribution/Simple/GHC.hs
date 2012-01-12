@@ -815,6 +815,7 @@ buildApp verbosity _pkg_descr lbi app clbi = do
       executableDirectoryPath = contentsPath </> "MacOS"
       resourcesPath = contentsPath </> "Resources"
       tmpDir    = prefix </> (appName app ++ "-tmp")
+  removeDirectoryRecursiveSilently appPath
   createDirectoryIfMissingVerbose verbosity True executableDirectoryPath
   createDirectoryIfMissingVerbose verbosity True tmpDir
 
@@ -897,10 +898,6 @@ buildApp verbosity _pkg_descr lbi app clbi = do
     requireProgram verbosity touchProgram $ withPrograms lbi
   (ibtoolConfiguredProgram, _) <-
     requireProgram verbosity ibtoolProgram $ withPrograms lbi
-  
-  info verbosity $ "Building " ++ appName app ++ ".app bundle..."
-  
-  removeDirectoryRecursiveSilently appPath
   
   createDirectoryIfMissingVerbose verbosity False appPath
   writeFileAtomic (appPath </> "PkgInfo") "APPL????"
