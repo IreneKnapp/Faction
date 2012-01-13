@@ -40,7 +40,7 @@ removeFileVerbose verbosity path = do
 removeDirectoryVerbose :: Verbosity -> FilePath -> IO ()
 removeDirectoryVerbose verbosity path = do
   debug verbosity $ "Removing directory " ++ path
-  Posix.removeLink $ pathCoerceToFile path
+  Posix.removeDirectory $ pathCoerceToFile path
 
 
 removeDirectoryRecursiveVerbose :: Verbosity -> FilePath -> IO ()
