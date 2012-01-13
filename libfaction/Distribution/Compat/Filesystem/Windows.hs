@@ -1,11 +1,13 @@
 module Distribution.Compat.Filesystem.Windows
   (pathSeparator,
    pathSeparators,
-   removeFileSilently,
-   removeDirectorySilently,
-   removeDirectoryRecursiveSilently,
+   removeFileVerbose,
+   removeDirectoryVerbose,
+   removeDirectoryRecursiveVerbose,
    listDirectory)
   where
+
+import Distribution.Verbosity
 
 
 pathSeparator :: Char
@@ -16,18 +18,18 @@ pathSeparators :: [Char]
 pathSeparators = ['\\', '/']
 
 
-removeFileSilently :: FilePath -> IO ()
-removeFileSilently path = do
+removeFileVerbose :: Verbosity -> FilePath -> IO ()
+removeFileVerbose verbosity path = do
   error "Unimplemented."
 
 
-removeDirectorySilently :: FilePath -> IO ()
-removeDirectorySilently path = do
+removeDirectoryVerbose :: Verbosity -> FilePath -> IO ()
+removeDirectoryVerbose verbosity path = do
   error "Unimplemented."
 
 
-removeDirectoryRecursiveSilently :: FilePath -> IO ()
-removeDirectoryRecursiveSilently path = do
+removeDirectoryRecursiveVerbose :: Verbosity -> FilePath -> IO ()
+removeDirectoryRecursiveVerbose verbosity path = do
   error "Unimplemented."
 
 

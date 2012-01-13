@@ -8,15 +8,17 @@ module Distribution.Compat.Filesystem.Posix
    pathIsDirectory,
    pathIsFile,
    (</>),
-   removeFileSilently,
-   removeDirectorySilently,
-   removeDirectoryRecursiveSilently,
+   removeFileVerbose,
+   removeDirectoryVerbose,
+   removeDirectoryRecursiveVerbose,
    listDirectory)
   where
 
 import Control.Exception
 import Data.List
 import Distribution.Compat.Filesystem.Portable
+import Distribution.Simple.Utils
+import Distribution.Verbosity
 import qualified System.Posix.Directory as Posix
 import qualified System.Posix.Files as Posix
 
@@ -29,18 +31,21 @@ pathSeparators :: [Char]
 pathSeparators = ['/']
 
 
-removeFileSilently :: FilePath -> IO ()
-removeFileSilently path = do
+removeFileVerbose :: Verbosity -> FilePath -> IO ()
+removeFileVerbose verbosity path = do
+  debug verbosity $ "Removing file " ++ path
   Posix.removeLink $ pathCoerceToFile path
 
 
-removeDirectorySilently :: FilePath -> IO ()
-removeDirectorySilently path = do
+removeDirectoryVerbose :: Verbosity -> FilePath -> IO ()
+removeDirectoryVerbose verbosity path = do
+  debug verbosity $ "Removing directory " ++ path
   Posix.removeLink $ pathCoerceToFile path
 
 
-removeDirectoryRecursiveSilently :: FilePath -> IO ()
-removeDirectoryRecursiveSilently path = do
+removeDirectoryRecursiveVerbose :: Verbosity -> FilePath -> IO ()
+removeDirectoryRecursiveVerbose verbosity path = do
+  debug verbosity $ "Removing directory recursively " ++ path
   let visit path = do
         exists <- Posix.fileExist path
         if exists
@@ -54,12 +59,12 @@ removeDirectoryRecursiveSilently path = do
                   else visitFile path
           else return ()
       visitFile path = do
-        removeFileSilently path
+        removeFileVerbose verbosity path
       visitDirectory path = do
         itemPaths <- listDirectory path
         mapM_ visit
               $ map (path </>) $ itemPaths \\ [".", ".."]
-        removeDirectorySilently path
+        removeDirectoryVerbose verbosity path
   visit path
 
 

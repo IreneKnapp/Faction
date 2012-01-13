@@ -131,7 +131,7 @@ import System.FilePath          ( (</>), (<.>), takeExtension,
 import System.IO (hClose, hPutStrLn)
 import Distribution.Compat.Exception (catchExit, catchIO)
 import Distribution.Compat.Filesystem
-         ( removeDirectoryRecursiveSilently )
+         ( removeDirectoryRecursiveVerbose )
 
 -- -----------------------------------------------------------------------------
 -- Configuring
@@ -815,7 +815,7 @@ buildApp verbosity _pkg_descr lbi app clbi = do
       executableDirectoryPath = contentsPath </> "MacOS"
       resourcesPath = contentsPath </> "Resources"
       tmpDir    = prefix </> (appName app ++ "-tmp")
-  removeDirectoryRecursiveSilently appPath
+  removeDirectoryRecursiveVerbose verbosity appPath
   createDirectoryIfMissingVerbose verbosity True executableDirectoryPath
   createDirectoryIfMissingVerbose verbosity True tmpDir
 
