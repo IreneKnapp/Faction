@@ -59,7 +59,7 @@ logToProgress mbj l = let
     -- the entire tree.
     go ms (x : xs) r         s        = Step x (go ms xs r s)
     go ms []       (Just cs) _        = Fail ("Could not resolve dependencies:\n" ++
-                                        unlines (showMessages (foldr (\ v _ -> v `S.member` cs) True) False ms))
+                                        unlines (showMessages (Prelude.foldr (\ v _ -> v `S.member` cs) True) False ms))
     go _  []       _         (Just s) = Done s
     go _  []       _         _        = Fail ("Could not resolve dependencies.") -- should not happen
 

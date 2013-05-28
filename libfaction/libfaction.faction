@@ -37,13 +37,13 @@ Library
                    array      >= 0   && < 2,
                    containers >= 0   && < 1,
                    directory  >= 1   && < 2,
-                   filepath   >= 1   && < 1.3,
+                   filepath   >= 1   && < 1.4,
                    old-time   >= 1   && < 2,
                    pretty     >= 1   && < 2,
                    process    >= 1   && < 2
   Default-Language: Haskell2010
   if !os(windows)
-    Build-Depends: unix       >= 2.0 && < 2.6
+    Build-Depends: unix       >= 2.0 && < 2.7
 
   GHC-Options: -Wall -fno-ignore-asserts
 
@@ -108,7 +108,6 @@ Library
         Distribution.Compat.Exception,
         Distribution.Compat.CopyFile,
         Distribution.Compat.TempFile,
-        Distribution.Compat.Filesystem,
         Distribution.Compat.Filesystem.Portable,
         Distribution.Compat.Filesystem.Posix,
         Distribution.Compat.Filesystem.Windows,

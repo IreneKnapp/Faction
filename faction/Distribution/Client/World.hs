@@ -46,6 +46,7 @@ import Text.PrettyPrint ( (<>), (<+>) )
 
 import Data.Char as Char
 
+import Control.Exception (catch)
 import Data.List
          ( unionBy, deleteFirstsBy, nubBy )
 import Data.Maybe

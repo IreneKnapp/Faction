@@ -69,9 +69,9 @@ import System.FilePath
 
 import Prelude hiding (catch, ioError)
 import System.IO.Error
-         ( catch, isDoesNotExistError, ioError )
+         ( isDoesNotExistError, ioError )
 import Control.Exception
-         ( assert )
+         ( catch, assert )
 import Data.Maybe
          ( catMaybes )
 

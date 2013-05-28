@@ -59,7 +59,7 @@ import Data.List   (isPrefixOf, groupBy)
 import Data.Monoid (Monoid(..))
 import qualified Data.Map as Map
 import Control.Monad (MonadPlus(mplus), when, unless, liftM)
-import Control.Exception (evaluate)
+import Control.Exception (catch, evaluate)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8
 import qualified Data.ByteString.Char8 as BSS
@@ -73,8 +73,8 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import System.IO.Error (isDoesNotExistError)
 import System.Directory
          ( getModificationTime, doesFileExist )
-import System.Time
-         ( getClockTime, diffClockTimes, normalizeTimeDiff, TimeDiff(tdDay) )
+import Data.Time
+         ( getCurrentTime, diffUTCTime )
 
 
 getInstalledPackages :: Verbosity -> Compiler
@@ -192,12 +192,12 @@ readRepoIndex verbosity repo =
     isOldThreshold = 15 --days
     warnIfIndexIsOld indexFile = do
       indexTime   <- getModificationTime indexFile
-      currentTime <- getClockTime
-      let diff = normalizeTimeDiff (diffClockTimes currentTime indexTime)
-      when (tdDay diff >= isOldThreshold) $ case repoKind repo of
+      currentTime <- getCurrentTime
+      let diff = diffUTCTime currentTime indexTime
+      when (((floor diff) `div` 86400) >= isOldThreshold) $ case repoKind repo of
         Left  remoteRepo -> warn verbosity $
              "The package list for '" ++ remoteRepoName remoteRepo
-          ++ "' is " ++ show (tdDay diff)  ++ " days old.\nRun "
+          ++ "' is " ++ show ((floor diff) `div` 86400)  ++ " days old.\nRun "
           ++ "'cabal update' to get the latest list of available packages."
         Right _localRepo -> return ()
 

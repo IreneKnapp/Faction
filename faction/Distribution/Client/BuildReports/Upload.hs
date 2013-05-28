@@ -51,7 +51,7 @@ postBuildReport uri buildReport = do
   }
   case rspCode response of
     (3,0,3) | [Just buildId] <- [ do rel <- parseRelativeReference location
-                                     relativeTo rel uri
+                                     return $ relativeTo rel uri
                                   | Header HdrLocation location <- rspHeaders response ]
               -> return $ buildId
     _         -> error "Unrecognised response from server."

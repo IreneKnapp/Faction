@@ -73,6 +73,8 @@ import Data.Monoid
          ( Monoid(..) )
 import Control.Monad
          ( when, foldM, liftM )
+import Control.Exception
+         ( catch )
 import qualified Data.Map as Map
 import qualified Distribution.Compat.ReadP as Parse
          ( option )

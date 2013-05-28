@@ -69,6 +69,7 @@ import System.FilePath   ( (</>), (<.>) )
 import System.IO         ( Handle )
 import System.Exit       ( ExitCode(..), exitWith )
 import System.Process    ( runProcess, waitForProcess )
+import Control.Exception ( catch, SomeException )
 import Control.Monad     ( when, unless )
 import Data.List         ( maximumBy )
 import Data.Maybe        ( fromMaybe, isJust )
@@ -200,7 +201,9 @@ externalSetupMethod verbosity options pkg bt mkargs = do
               return (version, options')
 
   savedFactionVersion = do
-    versionString <- readFile setupVersionFile `catch` \_ -> return ""
+    versionString <- readFile setupVersionFile `catch` \e -> do
+      return (e :: SomeException)
+      return ""
     case reads versionString of
       [(version,s)] | all isSpace s -> return (Just version)
       _                             -> return Nothing
